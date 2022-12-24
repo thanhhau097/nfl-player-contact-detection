@@ -120,16 +120,11 @@ class NFLDataset(Dataset):
         self.video_metadata = pd.read_csv(os.path.join(self.csv_folder, "train_video_metadata.csv"))
 
         if self.mode == "train":
-            # labels_df = labels_df[labels_df["fold"] != self.fold]
-            # self.labels = expand_contact_id(labels_df)
-            # self.tracking = self.tracking[self.tracking["fold"] != self.fold]
-            # self.helmets = self.helmets[self.helmets["fold"] != self.fold]
-            # self.video_metadata = self.video_metadata[self.video_metadata["fold"] != self.fold]
-            labels_df = labels_df[labels_df["fold"] == self.fold]
+            labels_df = labels_df[labels_df["fold"] != self.fold]
             self.labels = expand_contact_id(labels_df)
-            self.tracking = self.tracking[self.tracking["fold"] == self.fold]
-            self.helmets = self.helmets[self.helmets["fold"] == self.fold]
-            self.video_metadata = self.video_metadata[self.video_metadata["fold"] == self.fold]
+            self.tracking = self.tracking[self.tracking["fold"] != self.fold]
+            self.helmets = self.helmets[self.helmets["fold"] != self.fold]
+            self.video_metadata = self.video_metadata[self.video_metadata["fold"] != self.fold]
         elif self.mode == "val":
             labels_df = labels_df[labels_df["fold"] == self.fold]
             self.labels = expand_contact_id(labels_df)
