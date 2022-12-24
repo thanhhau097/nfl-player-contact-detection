@@ -79,6 +79,12 @@ def create_features(df, tr_tracking, merge_col="step", use_cols=["x_position", "
     return df_combo, output_cols
 
 
+def run_video_cmd(cmd):
+    print(cmd)
+    if 'Endzone2' not in cmd:
+        subprocess.run(cmd, shell=True)
+
+
 class NFLDataset(Dataset):
     def __init__(self, csv_folder, video_folder, frames_folder, mode='train', cache=True, fold=0):
         self.csv_folder = csv_folder
@@ -108,9 +114,18 @@ class NFLDataset(Dataset):
         ])
 
     def preprocess_video(self):
+        from multiprocessing import Pool
+
+        cmds = []
         for video in tqdm(self.helmets.video.unique()):
-            if 'Endzone2' not in video:
-                subprocess.run(f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -f image2 {os.path.join(self.frames_folder, video)}_%04d.jpg -hide_banner -loglevel error", shell=True)
+            cmds.append(f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -f image2 {os.path.join(self.frames_folder, video)}_%04d.jpg -hide_banner -loglevel error")
+            
+        with Pool(32) as p:
+            print(p.map(run_video_cmd, cmds))
+
+        # for video in tqdm(self.helmets.video.unique()):
+        #     if 'Endzone2' not in video:
+        #         subprocess.run(f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -f image2 {os.path.join(self.frames_folder, video)}_%04d.jpg -hide_banner -loglevel error", shell=True)
 
     def preprocess_csv(self):
         # split using fold in data
