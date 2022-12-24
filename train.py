@@ -3,7 +3,6 @@ import os
 import sys
 
 import numpy as np
-import pandas as pd
 import torch
 import transformers
 from transformers import HfArgumentParser, TrainingArguments, set_seed
@@ -50,7 +49,9 @@ def main():
         datefmt="%m/%d/%Y %H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
-    logger.setLevel(logging.INFO if is_main_process(training_args.local_rank) else logging.WARN)
+    logger.setLevel(
+        logging.INFO if is_main_process(training_args.local_rank) else logging.WARN
+    )
     # Set the verbosity to info of the Transformers logger (on main process only):
     if is_main_process(training_args.local_rank):
         # transformers.utils.logging.set_verbosity_info()
@@ -60,18 +61,21 @@ def main():
     # Set seed before initializing model.
     set_seed(training_args.seed)
     data_folder = data_args.data_folder
+    fold = data_args.fold
 
     train_dataset = NFLDataset(
-        csv_folder=data_folder,
+        csv_folder=os.path.join(data_folder, "kfold"),
         video_folder=os.path.join(data_folder, "train"),
-        frames_folder=os.path.join(data_folder, "train_frames"),
-        mode="train")
-    
+        frames_folder=os.path.join(data_folder, "train_frames", str(fold)),
+        mode="train",
+    )
+
     val_dataset = NFLDataset(
-        csv_folder=data_folder,
-        video_folder=os.path.join(data_folder, "val"),
-        frames_folder=os.path.join(data_folder, "val_frames"),
-        mode="val")
+        csv_folder=os.path.join(data_folder, "kfold"),
+        video_folder=os.path.join(data_folder, "train"),
+        frames_folder=os.path.join(data_folder, "val_frames", str(fold)),
+        mode="val",
+    )
 
     # Initialize trainer
     model = Model(model_args.model_name)

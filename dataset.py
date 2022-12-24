@@ -80,12 +80,13 @@ def create_features(df, tr_tracking, merge_col="step", use_cols=["x_position", "
 
 
 class NFLDataset(Dataset):
-    def __init__(self, csv_folder, video_folder, frames_folder, mode='train', cache=True):
+    def __init__(self, csv_folder, video_folder, frames_folder, mode='train', cache=True, fold=0):
         self.csv_folder = csv_folder
         self.video_folder = video_folder
         self.frames_folder = frames_folder
         self.mode = mode
         self.cache = cache
+        self.fold = fold
 
         if not os.path.exists(frames_folder):
             os.makedirs(frames_folder, exist_ok=True)
@@ -112,17 +113,29 @@ class NFLDataset(Dataset):
                 subprocess.run(f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -f image2 {os.path.join(self.frames_folder, video)}_%04d.jpg -hide_banner -loglevel error", shell=True)
 
     def preprocess_csv(self):
-        # TODO: we have to split train/val externally
+        # split using fold in data
+        labels_df = pd.read_csv(os.path.join(self.csv_folder, "train_labels.csv"))
+        self.tracking = pd.read_csv(os.path.join(self.csv_folder, "train_player_tracking.csv"))
+        self.helmets = pd.read_csv(os.path.join(self.csv_folder, "train_baseline_helmets.csv"))
+        self.video_metadata = pd.read_csv(os.path.join(self.csv_folder, "train_video_metadata.csv"))
+
         if self.mode == "train":
-            self.labels = expand_contact_id(pd.read_csv(os.path.join(self.csv_folder, "train_labels.csv")))
-            self.tracking = pd.read_csv(os.path.join(self.csv_folder, "train_player_tracking.csv"))
-            self.helmets = pd.read_csv(os.path.join(self.csv_folder, "train_baseline_helmets.csv"))
-            self.video_metadata = pd.read_csv(os.path.join(self.csv_folder, "train_video_metadata.csv"))
+            # labels_df = labels_df[labels_df["fold"] != self.fold]
+            # self.labels = expand_contact_id(labels_df)
+            # self.tracking = self.tracking[self.tracking["fold"] != self.fold]
+            # self.helmets = self.helmets[self.helmets["fold"] != self.fold]
+            # self.video_metadata = self.video_metadata[self.video_metadata["fold"] != self.fold]
+            labels_df = labels_df[labels_df["fold"] == self.fold]
+            self.labels = expand_contact_id(labels_df)
+            self.tracking = self.tracking[self.tracking["fold"] == self.fold]
+            self.helmets = self.helmets[self.helmets["fold"] == self.fold]
+            self.video_metadata = self.video_metadata[self.video_metadata["fold"] == self.fold]
         elif self.mode == "val":
-            self.labels = expand_contact_id(pd.read_csv(os.path.join(self.csv_folder, "val_labels.csv")))
-            self.tracking = pd.read_csv(os.path.join(self.csv_folder, "val_player_tracking.csv"))
-            self.helmets = pd.read_csv(os.path.join(self.csv_folder, "val_baseline_helmets.csv"))
-            self.video_metadata = pd.read_csv(os.path.join(self.csv_folder, "val_video_metadata.csv"))
+            labels_df = labels_df[labels_df["fold"] == self.fold]
+            self.labels = expand_contact_id(labels_df)
+            self.tracking = self.tracking[self.tracking["fold"] == self.fold]
+            self.helmets = self.helmets[self.helmets["fold"] == self.fold]
+            self.video_metadata = self.video_metadata[self.video_metadata["fold"] == self.fold]
         else:
             raise ValueError("Mode has to be in ['train', 'val']")
 

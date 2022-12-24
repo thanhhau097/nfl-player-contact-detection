@@ -39,22 +39,30 @@ class CustomTrainer(Trainer):
         optimizer_grouped_parameters = [
             {
                 "params": [
-                    p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)
+                    p
+                    for n, p in model.named_parameters()
+                    if not any(nd in n for nd in no_decay)
                 ],
                 "weight_decay": self.args.weight_decay,
             },
             {
                 "params": [
-                    p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)
+                    p
+                    for n, p in model.named_parameters()
+                    if any(nd in n for nd in no_decay)
                 ],
                 "weight_decay": 0.0,
             },
         ]
-        optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
+        optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(
+            self.args
+        )
         self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
         return self.optimizer
 
-    def prediction_step(self, model, inputs, prediction_loss_only=False, ignore_keys=None):
+    def prediction_step(
+        self, model, inputs, prediction_loss_only=False, ignore_keys=None
+    ):
         inputs = self._prepare_inputs(inputs)
         with torch.no_grad():
             with self.compute_loss_context_manager():
@@ -90,7 +98,9 @@ def pfbeta_torch(labels, preds, beta=1):
     c_recall = ctp / y_true_count
     if c_precision > 0 and c_recall > 0:
         result = (
-            (1 + beta_squared) * (c_precision * c_recall) / (beta_squared * c_precision + c_recall)
+            (1 + beta_squared)
+            * (c_precision * c_recall)
+            / (beta_squared * c_precision + c_recall)
         )
         return result
     else:
