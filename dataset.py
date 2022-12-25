@@ -151,6 +151,7 @@ class NFLDataset(Dataset):
 
         print("Creating features...")
         df, feature_cols = create_features(self.labels, self.tracking, use_cols=USE_COLS)
+        df = df.query('not distance>2').reset_index(drop=True)
         df['frame'] = (df['step']/10*59.94+5*59.94).astype('int') + 1
 
         self.df = df
