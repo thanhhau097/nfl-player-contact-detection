@@ -118,7 +118,9 @@ class NFLDataset(Dataset):
 
         cmds = []
         for video in tqdm(self.helmets.video.unique()):
-            cmds.append(f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -f image2 {os.path.join(self.frames_folder, video)}_%04d.jpg -hide_banner -loglevel error")
+            if not os.path.exists(os.path.join(self.frames_folder, video)):
+                os.makedirs(os.path.join(self.frames_folder, video), exist_ok=True)
+            cmds.append(f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -f image2 {os.path.join(self.frames_folder, video, video)}_%04d.jpg -hide_banner -loglevel error")
             
         with Pool(32) as p:
             print(p.map(run_video_cmd, cmds))
@@ -180,7 +182,7 @@ class NFLDataset(Dataset):
         for game_play in tqdm(self.video_metadata.game_play.unique()):
             for view in ['Endzone', 'Sideline']:
                 video = game_play + f'_{view}.mp4'
-                self.video2frames[video] = max(list(map(lambda x:int(x.split('_')[-1].split('.')[0]), glob.glob(os.path.join(os.path.abspath(self.frames_folder), f'{video}*')))))
+                self.video2frames[video] = max(list(map(lambda x:int(x.split('_')[-1].split('.')[0]), glob.glob(os.path.join(os.path.abspath(self.frames_folder), video, f'{video}*')))))
             
     def __len__(self):
         return len(self.df)
@@ -232,7 +234,7 @@ class NFLDataset(Dataset):
                 img_new = np.zeros((256, 256), dtype=np.float32)
 
                 if flag == 1 and f <= self.video2frames[video]:
-                    img = cv2.imread(os.path.join(self.frames_folder, f'{video}_{f:04d}.jpg'), 0)
+                    img = cv2.imread(os.path.join(self.frames_folder, video, f'{video}_{f:04d}.jpg'), 0)
 
                     x, w, y, h = bboxes[i]
 
