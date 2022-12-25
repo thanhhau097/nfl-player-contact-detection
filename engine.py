@@ -2,7 +2,7 @@ from typing import Dict
 
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, matthews_corrcoef
 from transformers import Trainer
 from transformers.trainer_pt_utils import nested_detach
 
@@ -84,8 +84,10 @@ def compute_metrics(eval_preds):
         eval_preds.label_ids[0],
         predictions,
     )
-    auc = roc_auc_score(eval_preds.label_ids[0], predictions)
-    return {"pF1": fbeta_score, "AUC": auc}
+
+    auc = roc_auc_score(eval_preds.label_ids, predictions)
+    score = matthews_corrcoef(eval_preds.label_ids, predictions > 0.5)
+    return {"pF1": fbeta_score, "AUC": auc, "matthews_corrcoef": -score}
 
 
 def pfbeta_torch(labels, preds, beta=1):
