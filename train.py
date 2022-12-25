@@ -68,6 +68,9 @@ def main():
         video_folder=os.path.join(data_folder, "train"),
         frames_folder=os.path.join(data_folder, "train_frames", str(fold)),
         mode="train",
+        size=data_args.size,
+        num_frames=data_args.num_frames,
+        frame_steps=data_args.frame_steps
     )
 
     val_dataset = NFLDataset(
@@ -75,10 +78,13 @@ def main():
         video_folder=os.path.join(data_folder, "train"),
         frames_folder=os.path.join(data_folder, "val_frames", str(fold)),
         mode="val",
+        size=data_args.size,
+        num_frames=data_args.num_frames,
+        frame_steps=data_args.frame_steps
     )
 
     # Initialize trainer
-    model = Model(model_args.model_name)
+    model = Model(model_args.model_name, in_chans=data_args.num_frames)
     if last_checkpoint is None and model_args.resume is not None:
         logger.info(f"Loading {model_args.resume} ...")
         checkpoint = torch.load(model_args.resume, "cpu")

@@ -86,13 +86,16 @@ def run_video_cmd(cmd):
 
 
 class NFLDataset(Dataset):
-    def __init__(self, csv_folder, video_folder, frames_folder, mode='train', cache=True, fold=0):
+    def __init__(self, csv_folder, video_folder, frames_folder, mode='train', cache=True, fold=0, size=256, num_frames=13, frame_steps=4):
         self.csv_folder = csv_folder
         self.video_folder = video_folder
         self.frames_folder = frames_folder
         self.mode = mode
         self.cache = cache
         self.fold = fold
+        self.size = size
+        self.num_frames = num_frames
+        self.frame_steps = frame_steps
 
         if not os.path.exists(frames_folder):
             os.makedirs(frames_folder, exist_ok=True)
@@ -192,7 +195,7 @@ class NFLDataset(Dataset):
     #     return cv2.imread(path, 0)
    
     def __getitem__(self, idx):   
-        window = 24
+        window = self.num_frames // 2 * self.frame_steps
         frame = self.frame[idx]
         
         if self.mode == 'train':  # TODO: what is this?
@@ -223,22 +226,22 @@ class NFLDataset(Dataset):
                 else:
                     bboxes.append([np.nan, np.nan, np.nan, np.nan])
             bboxes = pd.DataFrame(bboxes).interpolate(limit_direction='both').values
-            bboxes = bboxes[::4]
+            bboxes = bboxes[::self.frame_steps]
 
             if bboxes.sum() > 0:
                 flag = 1
             else:
                 flag = 0
                     
-            for i, f in enumerate(range(frame-window, frame+window+1, 4)):
-                img_new = np.zeros((256, 256), dtype=np.float32)
+            for i, f in enumerate(range(frame-window, frame+window+1, self.frame_steps)):
+                img_new = np.zeros((self.size, self.size), dtype=np.float32)
 
                 if flag == 1 and f <= self.video2frames[video]:
                     img = cv2.imread(os.path.join(self.frames_folder, video, f'{video}_{f:04d}.jpg'), 0)
 
                     x, w, y, h = bboxes[i]
 
-                    img = img[int(y+h/2)-128:int(y+h/2)+128,int(x+w/2)-128:int(x+w/2)+128].copy()
+                    img = img[int(y+h/2) - self.size // 2:int(y+h/2)+self.size // 2,int(x+w/2)-self.size // 2:int(x+w/2)+self.size // 2].copy()
                     img_new[:img.shape[0], :img.shape[1]] = img
                     
                 imgs.append(img_new)

@@ -4,10 +4,10 @@ import timm
 
 
 class Model(nn.Module):
-    def __init__(self, model_name="resnet50"):
+    def __init__(self, model_name="resnet50", in_chans=13):
         super(Model, self).__init__()
         self.backbone = timm.create_model(
-            model_name, pretrained=True, num_classes=500, in_chans=13
+            model_name, pretrained=True, num_classes=500, in_chans=in_chans
         )
         self.mlp = nn.Sequential(
             nn.Linear(18, 64),
