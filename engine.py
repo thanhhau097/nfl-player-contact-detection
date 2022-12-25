@@ -87,7 +87,7 @@ def compute_metrics(eval_preds):
 
     auc = roc_auc_score(eval_preds.label_ids, predictions)
     score = matthews_corrcoef(eval_preds.label_ids, predictions > 0.5)
-    return {"pF1": fbeta_score, "AUC": auc, "matthews_corrcoef": -score}
+    return {"pF1": fbeta_score, "AUC": auc, "matthews_corrcoef": score}
 
 
 def pfbeta_torch(labels, preds, beta=1):
