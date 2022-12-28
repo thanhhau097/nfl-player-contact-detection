@@ -85,6 +85,15 @@ def run_video_cmd(cmd):
         subprocess.run(cmd, shell=True)
 
 
+def gaussian2D(shape, sigma=1):
+    m, n = [(ss - 1.) / 2. for ss in shape]
+    y, x = np.ogrid[-m:m+1,-n:n+1]
+
+    h = np.exp(-(x * x + y * y) / (2 * sigma * sigma))
+    h[h < np.finfo(h.dtype).eps * h.max()] = 0
+    return h.astype(np.float32)
+
+
 class NFLDataset(Dataset):
     def __init__(self, csv_folder, video_folder, frames_folder, mode='train', cache=True, fold=0, size=256, num_frames=13, frame_steps=4):
         self.csv_folder = csv_folder
@@ -96,6 +105,10 @@ class NFLDataset(Dataset):
         self.size = size
         self.num_frames = num_frames
         self.frame_steps = frame_steps
+        self.img_width = 960
+        self.img_height = 540
+        self.sigma = 128
+        self.heatmap = gaussian2D((self.img_height, self.img_width), self.sigma)
 
         if not os.path.exists(frames_folder):
             os.makedirs(frames_folder, exist_ok=True)
@@ -234,16 +247,20 @@ class NFLDataset(Dataset):
                 flag = 0
                     
             for i, f in enumerate(range(frame-window, frame+window+1, self.frame_steps)):
-                img_new = np.zeros((self.size, self.size), dtype=np.float32)
+                # img_new = np.zeros((self.size, self.size), dtype=np.float32)
+                img_new = np.zeros((self.img_height, self.img_width), dtype=np.float32)
 
                 if flag == 1 and f <= self.video2frames[video]:
                     img = cv2.imread(os.path.join(self.frames_folder, video, f'{video}_{f:04d}.jpg'), 0)
-
+                    img = cv2.resize(img, (self.img_width, self.img_height))
                     x, w, y, h = bboxes[i]
 
-                    img = img[int(y+h/2) - self.size // 2:int(y+h/2)+self.size // 2,int(x+w/2)-self.size // 2:int(x+w/2)+self.size // 2].copy()
-                    img_new[:img.shape[0], :img.shape[1]] = img
-                    
+                    # img = img[int(y+h/2) - self.size // 2:int(y+h/2)+self.size // 2,int(x+w/2)-self.size // 2:int(x+w/2)+self.size // 2].copy()
+                    # img_new[:img.shape[0], :img.shape[1]] = img
+
+                    img_new = img * self.heatmap
+                    # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
+
                 imgs.append(img_new)
                 
         feature = np.float32(self.feature[idx])
