@@ -11,7 +11,7 @@ from transformers.utils.import_utils import is_torchdynamo_available
 
 from data_args import DataArguments
 from dataset import collate_fn, NFLDataset
-from engine import CustomTrainer, compute_metrics, pfbeta_torch
+from engine import CustomTrainer, compute_metrics, pfbeta_torch, matthews_corrcoef
 from model import Model
 from model_args import ModelArguments
 
@@ -148,16 +148,17 @@ def main():
         thresholds = np.arange(0.1, 0.9, 0.01)
         scores = []
         predictions = torch.sigmoid(torch.from_numpy(output.predictions)).numpy()
-        labels = output.label_ids[0]
+        labels = output.label_ids
         for threshold in thresholds:
             preds = predictions
             # preds[preds < threshold] = 0.0
             preds = preds > threshold
-            pf1 = pfbeta_torch(labels, preds)
-            scores.append(pf1)
+            # pf1 = pfbeta_torch(labels, preds)
+            score = matthews_corrcoef(labels, preds)
+            scores.append(score)
         best_threshold = thresholds[np.argmax(scores)]
         best_score = np.max(scores)
-        logger.info(f"Best pF1: {best_score} @ {best_threshold}")
+        logger.info(f"Best matthews_corrcoef: {best_score} @ {best_threshold}")
 
 
 if __name__ == "__main__":
