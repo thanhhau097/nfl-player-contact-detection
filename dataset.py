@@ -179,9 +179,6 @@ class NFLDataset(Dataset):
         df['frame'] = (df['step']/10*59.94+5*59.94).astype('int') + 1
 
         self.df = df
-        self.frame = df.frame.values
-        self.players = df[['nfl_player_id_1','nfl_player_id_2']].values
-        self.game_play = df.game_play.values
 
         self.video2helmets = {}
         helmets_new = self.helmets.set_index('video')
@@ -232,7 +229,11 @@ class NFLDataset(Dataset):
         self.df[[i+'_prod' for i in cols]] = np.abs(self.df[[i+'_1' for i in cols]].values - self.df[[i+'_2' for i in cols]].values)
         feature_cols += [i+'_prod' for i in cols]
 
+        self.frame = self.df.frame.values
         self.feature = self.df[feature_cols].fillna(-1).values
+        self.players = self.df[['nfl_player_id_1','nfl_player_id_2']].values
+        self.game_play = self.df.game_play.values
+
         print("Number of features", len(feature_cols))
 
         print("Extracting frames from video")
