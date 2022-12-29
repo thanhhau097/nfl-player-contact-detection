@@ -25,12 +25,12 @@ sudo apt-get install libturbojpeg
 ```
 
 # TODO: 
-0. Verify preprocessing time of training on whole image (check resize/augmentation/model-forward time), because if it costs too much time, we can't inference.
-1. Add more features: https://www.kaggle.com/code/ahmedelfazouan/nfl-player-contact-detection-helmet-track-ftrs#Helmet-track-Features
-2. Add more center frames to the image input
-3. Add (attention) layer to focus more on center layer:
+- [ ] Verify preprocessing time of training on whole image (check resize/augmentation/model-forward time), because if it costs too much time, we can't inference: using turbojpeg, need to update in inference kernel
+- [x] Add more features: https://www.kaggle.com/code/ahmedelfazouan/nfl-player-contact-detection-helmet-track-ftrs#Helmet-track-Features: training
+- [ ] Add more center frames to the image input
+- [ ] Add (attention) layer to focus more on center layer:
     - Idea from @nhan
         - hoặc 2.5d + conv3d block ở sau feature map cuối
         - non-local block: chèn thêm block đấy sau last feature map, attention cross frames cross views luôn
-4. MCC loss function: https://www.kaggle.com/competitions/nfl-player-contact-detection/discussion/370723
-5. Full image with heatmap
+- [ ] MCC loss function: https://www.kaggle.com/competitions/nfl-player-contact-detection/discussion/370723
+- [ ] Full image with heatmap: in code but didn't train
