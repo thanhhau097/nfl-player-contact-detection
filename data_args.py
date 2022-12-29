@@ -17,3 +17,6 @@ class DataArguments:
     heatmap_sigma: int = field(default=128, metadata={"help": "sigma for drawing heatmap"})
     img_height: int = field(default=720, metadata={"help": "image height"})
     img_width: int = field(default=1280, metadata={"help": "image width"})
+    num_cache: int = field(
+        default=-1, metadata={"help": "num train frames cached on RAM"}
+    )

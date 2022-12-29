@@ -7,7 +7,7 @@ python kfold.py
 ```
 3. Train
 ```
-python -m torch.distributed.launch --nproc_per_node 2 train.py --output_dir ./outputs/ --num_train_epochs 20 --do_train --do_eval --metric_for_best_model eval_matthews_corrcoef --overwrite_output_dir --per_device_train_batch_size 64 --model_name resnet50 --fold 0 --dataloader_num_workers 32 --evaluation_strategy steps --eval_steps 5000 --save_strategy steps --save_steps 5000 --learning_rate 1e-3 --save_total_limit 3 --fp16 --load_best_model_at_end
+python -m torch.distributed.launch --nproc_per_node 2 train.py --logging_strategy steps --logging_steps 20 --warmup_ratio 0.1 --lr_scheduler_type cosine --adam_eps 1e-6 --optim adamw_torch --output_dir ./outputs/ --num_train_epochs 20 --do_train --do_eval --metric_for_best_model eval_matthews_corrcoef --overwrite_output_dir --per_device_train_batch_size 32 --model_name resnet50 --fold 0 --dataloader_num_workers 32 --evaluation_strategy epoch --save_strategy epoch --learning_rate 1e-3 --save_total_limit 3 --fp16 --load_best_model_at_end --num_cache 120000
 ```
 
 4. Find best threshold

@@ -1,14 +1,15 @@
+import timm
 import torch
 from torch import nn
-import timm
 
 
 class Model(nn.Module):
     def __init__(self, model_name="resnet50", in_chans=13):
         super(Model, self).__init__()
         self.backbone = timm.create_model(
-            model_name, pretrained=True, num_classes=500, in_chans=in_chans
+            model_name, pretrained=True, in_chans=in_chans, drop_path_rate=0.2
         )
+        self.backbone.reset_classifier(0, "avg")
         self.mlp = nn.Sequential(
             nn.Linear(130, 64),
             nn.LayerNorm(64),
@@ -19,7 +20,7 @@ class Model(nn.Module):
             # nn.ReLU(),
             # nn.Dropout(0.2)
         )
-        self.fc = nn.Linear(64 + 500 * 2, 1)
+        self.fc = nn.Linear(64 + self.backbone.num_features * 2, 1)
 
     def forward(self, images, features, labels=None):
         b, c, h, w = images.shape
