@@ -10,7 +10,7 @@ class Model(nn.Module):
             model_name, pretrained=True, num_classes=500, in_chans=in_chans
         )
         self.mlp = nn.Sequential(
-            nn.Linear(18, 64),
+            nn.Linear(130, 64),
             nn.LayerNorm(64),
             nn.ReLU(),
             nn.Dropout(0.2),

@@ -1,4 +1,5 @@
 import os
+import gc
 import glob
 
 import numpy as np
@@ -12,6 +13,7 @@ from torch.utils.data import Dataset
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 import subprocess
+from turbojpeg import TurboJPEG, TJPF_GRAY
 
 
 USE_COLS = [
@@ -95,7 +97,9 @@ def gaussian2D(shape, sigma=1):
 
 
 class NFLDataset(Dataset):
-    def __init__(self, csv_folder, video_folder, frames_folder, mode='train', cache=True, fold=0, size=256, num_frames=13, frame_steps=4):
+    def __init__(self, csv_folder, video_folder, frames_folder, mode='train', cache=True, fold=0, size=256, num_frames=13, frame_steps=4, 
+        img_height=720, img_width=1280, use_heatmap=False, heatmap_sigma=128
+    ):
         self.csv_folder = csv_folder
         self.video_folder = video_folder
         self.frames_folder = frames_folder
@@ -105,10 +109,12 @@ class NFLDataset(Dataset):
         self.size = size
         self.num_frames = num_frames
         self.frame_steps = frame_steps
-        self.img_width = 960
-        self.img_height = 540
-        self.sigma = 128
+        self.img_width = img_width
+        self.img_height = img_height
+        self.sigma = heatmap_sigma
+        self.use_heatmap = use_heatmap
         self.heatmap = gaussian2D((self.img_height, self.img_width), self.sigma)
+        self.turbo_jpeg = TurboJPEG()
 
         if not os.path.exists(frames_folder):
             os.makedirs(frames_folder, exist_ok=True)
@@ -174,7 +180,6 @@ class NFLDataset(Dataset):
 
         self.df = df
         self.frame = df.frame.values
-        self.feature = df[feature_cols].fillna(-1).values
         self.players = df[['nfl_player_id_1','nfl_player_id_2']].values
         self.game_play = df.game_play.values
 
@@ -182,6 +187,53 @@ class NFLDataset(Dataset):
         helmets_new = self.helmets.set_index('video')
         for video in tqdm(self.helmets.video.unique()):
             self.video2helmets[video] = helmets_new.loc[video].reset_index(drop=True)
+
+        # TODO: add Helmet track Features
+        CLUSTERS = [10, 50, 100, 500]
+
+        def add_step_pct(df, cluster):
+            df['step_pct'] = cluster * (df['step']-min(df['step']))/(max(df['step'])-min(df['step']))
+            df['step_pct'] = df['step_pct'].apply(np.ceil).astype(np.int32)
+            return df
+
+        for cluster in CLUSTERS:
+            self.df = self.df.groupby('game_play').apply(lambda x:add_step_pct(x, cluster))
+
+            for helmet_view in ['Sideline', 'Endzone']:
+                helmets = self.helmets.copy(deep=True)
+                helmets.loc[helmets['view']=='Endzone2','view'] = 'Endzone'
+
+                helmets.rename(columns = {'frame': 'step'}, inplace = True)
+                helmets = helmets.groupby('game_play').apply(lambda x:add_step_pct(x, cluster))
+                helmets = helmets[self.helmets['view']==helmet_view]
+
+                helmets['helmet_id'] = helmets['game_play'] + '_' + helmets['nfl_player_id'].astype(str) + '_' + helmets['step_pct'].astype(str)
+
+                helmets = helmets[['helmet_id', 'left', 'width', 'top', 'height']].groupby('helmet_id').mean().reset_index()
+                for player_ind in [1, 2]:
+                    self.df['helmet_id'] = self.df['game_play'] + '_' + self.df['nfl_player_id_'+str(player_ind)].astype(str) + \
+                                            '_' + self.df['step_pct'].astype(str)
+
+                    self.df = self.df.merge(helmets, how = 'left')
+                    self.df.rename(columns = {i:i+'_'+helmet_view+'_'+str(cluster)+'_'+str(player_ind) for i in ['left', 'width', 'top', 'height']}, inplace = True)
+
+                    del self.df['helmet_id']
+                    gc.collect()
+
+                    feature_cols += [i+'_'+helmet_view+'_'+str(cluster)+'_'+str(player_ind) for i in ['left', 'width', 'top', 'height']]
+                del helmets
+                gc.collect()
+
+        cols = [i[:-2] for i in self.df.columns if i[-2:]=='_1' and i!='nfl_player_id_1']
+        self.df[[i+'_diff' for i in cols]] = np.abs(self.df[[i+'_1' for i in cols]].values - self.df[[i+'_2' for i in cols]].values)
+        feature_cols += [i+'_diff' for i in cols]
+
+        cols = USE_COLS
+        self.df[[i+'_prod' for i in cols]] = np.abs(self.df[[i+'_1' for i in cols]].values - self.df[[i+'_2' for i in cols]].values)
+        feature_cols += [i+'_prod' for i in cols]
+
+        self.feature = self.df[feature_cols].fillna(-1).values
+        print("Number of features", len(feature_cols))
 
         print("Extracting frames from video")
         if self.cache:
@@ -222,6 +274,7 @@ class NFLDataset(Dataset):
                 players.append(int(p))
         
         imgs = []
+
         for view in ['Endzone', 'Sideline']:
             video = self.game_play[idx] + f'_{view}.mp4'
 
@@ -245,27 +298,40 @@ class NFLDataset(Dataset):
                 flag = 1
             else:
                 flag = 0
-                    
+            
             for i, f in enumerate(range(frame-window, frame+window+1, self.frame_steps)):
-                # img_new = np.zeros((self.size, self.size), dtype=np.float32)
-                img_new = np.zeros((self.img_height, self.img_width), dtype=np.float32)
+                if self.use_heatmap:
+                    # using heatmap
+                    img_new = np.zeros((self.img_height, self.img_width), dtype=np.float32)
+                else:
+                    # using crop
+                    img_new = np.zeros((self.size, self.size), dtype=np.float32)
 
                 if flag == 1 and f <= self.video2frames[video]:
-                    img = cv2.imread(os.path.join(self.frames_folder, video, f'{video}_{f:04d}.jpg'), 0)
-                    img = cv2.resize(img, (self.img_width, self.img_height))
+                    # img = cv2.imread(os.path.join(self.frames_folder, video, f'{video}_{f:04d}.jpg'), 0)
+                    with open(os.path.join(self.frames_folder, video, f'{video}_{f:04d}.jpg'), 'rb') as in_file:
+                        img = self.turbo_jpeg.decode(in_file.read(), pixel_format=TJPF_GRAY)[:, : , 0]
+
+                    if img.shape[0] != self.img_height and img.shape[1] != self.img_width:
+                        img = cv2.resize(img, (self.img_width, self.img_height))
+
                     x, w, y, h = bboxes[i]
 
-                    # img = img[int(y+h/2) - self.size // 2:int(y+h/2)+self.size // 2,int(x+w/2)-self.size // 2:int(x+w/2)+self.size // 2].copy()
-                    # img_new[:img.shape[0], :img.shape[1]] = img
 
-                    img_new = img * self.heatmap
-                    # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
+                    if self.use_heatmap:
+                        # using heatmap
+                        img_new = img * self.heatmap
+                        # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
+                    else:
+                        # using crop
+                        img = img[int(y+h/2) - self.size // 2:int(y+h/2)+self.size // 2,int(x+w/2)-self.size // 2:int(x+w/2)+self.size // 2].copy()
+                        img_new[:img.shape[0], :img.shape[1]] = img
 
                 imgs.append(img_new)
-                
+
         feature = np.float32(self.feature[idx])
 
-        img = np.array(imgs).transpose(1, 2, 0)    
+        img = np.array(imgs).transpose(1, 2, 0)
         if self.mode == "train":
             img = self.train_aug(image=img)["image"]
         else:

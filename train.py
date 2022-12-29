@@ -70,7 +70,11 @@ def main():
         mode="train",
         size=data_args.size,
         num_frames=data_args.num_frames,
-        frame_steps=data_args.frame_steps
+        frame_steps=data_args.frame_steps,
+        img_height=data_args.img_height,
+        img_width=data_args.img_width,
+        use_heatmap=data_args.use_heatmap,
+        heatmap_sigma=data_args.heatmap_sigma
     )
 
     val_dataset = NFLDataset(
@@ -80,7 +84,11 @@ def main():
         mode="val",
         size=data_args.size,
         num_frames=data_args.num_frames,
-        frame_steps=data_args.frame_steps
+        frame_steps=data_args.frame_steps,
+        img_height=data_args.img_height,
+        img_width=data_args.img_width,
+        use_heatmap=data_args.use_heatmap,
+        heatmap_sigma=data_args.heatmap_sigma
     )
 
     # Initialize trainer
