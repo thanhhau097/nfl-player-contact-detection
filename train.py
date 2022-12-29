@@ -3,15 +3,16 @@ import os
 import sys
 
 import numpy as np
+import pandas as pd
 import torch
 import transformers
+from joblib import Parallel, delayed
 from transformers import HfArgumentParser, TrainingArguments, set_seed
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
-from transformers.utils.import_utils import is_torchdynamo_available
 
 from data_args import DataArguments
-from dataset import collate_fn, NFLDataset
-from engine import CustomTrainer, compute_metrics, pfbeta_torch, matthews_corrcoef
+from dataset import NFLDataset, collate_fn, read_image
+from engine import CustomTrainer, compute_metrics, matthews_corrcoef
 from model import Model
 from model_args import ModelArguments
 
@@ -63,24 +64,46 @@ def main():
     data_folder = data_args.data_folder
     fold = data_args.fold
 
+    labels_df = pd.read_csv(os.path.join(data_folder, "train_features.csv"))
+    helmets = pd.read_csv(os.path.join(data_folder, "train_baseline_helmets_kfold.csv"))
+
     train_dataset = NFLDataset(
-        csv_folder=os.path.join(data_folder, "kfold"),
+        labels_df[labels_df["fold"] != fold],
+        helmets[helmets["fold"] != fold],
         video_folder=os.path.join(data_folder, "train"),
         frames_folder=os.path.join(data_folder, "train_frames", str(fold)),
         mode="train",
         size=data_args.size,
         num_frames=data_args.num_frames,
-        frame_steps=data_args.frame_steps
+        frame_steps=data_args.frame_steps,
     )
 
     val_dataset = NFLDataset(
-        csv_folder=os.path.join(data_folder, "kfold"),
+        labels_df[labels_df["fold"] == fold],
+        helmets[helmets["fold"] == fold],
         video_folder=os.path.join(data_folder, "train"),
         frames_folder=os.path.join(data_folder, "val_frames", str(fold)),
         mode="val",
         size=data_args.size,
         num_frames=data_args.num_frames,
-        frame_steps=data_args.frame_steps
+        frame_steps=data_args.frame_steps,
+    )
+    # Pre-load images
+    train_dataset.paths2images.update(
+        dict(
+            Parallel(n_jobs=30, verbose=1)(
+                delayed(read_image)(image_path)
+                for image_path in train_dataset.image_paths[: data_args.num_cache]
+            )
+        )
+    )
+    val_dataset.paths2images.update(
+        dict(
+            Parallel(n_jobs=30, verbose=1)(
+                delayed(read_image)(image_path)
+                for image_path in val_dataset.image_paths
+            )
+        )
     )
 
     # Initialize trainer
@@ -90,23 +113,11 @@ def main():
         checkpoint = torch.load(model_args.resume, "cpu")
         if "state_dict" in checkpoint:
             checkpoint = checkpoint.pop("state_dict")
-        if "birads_linear.weight" in checkpoint:
-            init_weight = checkpoint["birads_linear.weight"].mean(0, keepdim=True)
-            init_bias = checkpoint["birads_linear.bias"].mean(0, keepdim=True)
-            checkpoint = {
-                k: v
-                for k, v in checkpoint.items()
-                if not k.startswith(("birads", "density", "finding"))
-            }
-            checkpoint["linear.weight"] = init_weight
-            checkpoint["linear.bias"] = init_bias
         checkpoint = {k.replace("_orig_mod.", ""): v for k, v in checkpoint.items()}
         model.load_state_dict(checkpoint)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = model.to(device)
-    if is_torchdynamo_available():
-        model = torch.compile(model)
 
     trainer = CustomTrainer(
         model=model,
@@ -144,16 +155,14 @@ def main():
         # )
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
-        logger.info("*** Optimize pF1 ***")
+        logger.info("*** Optimize MCC ***")
         thresholds = np.arange(0.1, 0.9, 0.01)
         scores = []
         predictions = torch.sigmoid(torch.from_numpy(output.predictions)).numpy()
         labels = output.label_ids
         for threshold in thresholds:
             preds = predictions
-            # preds[preds < threshold] = 0.0
             preds = preds > threshold
-            # pf1 = pfbeta_torch(labels, preds)
             score = matthews_corrcoef(labels, preds)
             scores.append(score)
         best_threshold = thresholds[np.argmax(scores)]
