@@ -168,6 +168,27 @@ def read_image(path: str):
     return turbo_jpeg.decode(open(path, "rb").read(), pixel_format=TJPF_GRAY)[:, :, 0]
 
 
+def build_data_aug(mode: str):
+    if mode == "train":
+        return A.Compose(
+            [
+                A.HorizontalFlip(p=0.5),
+                # A.ShiftScaleRotate(p=0.5),
+                A.RandomBrightnessContrast(
+                    brightness_limit=(-0.1, 0.1), contrast_limit=(-0.1, 0.1), p=0.5
+                ),
+                A.Normalize(mean=[0.0], std=[1.0]),
+                ToTensorV2(),
+            ],
+            bbox_params=A.BboxParams(format="pascal_voc"),
+        )
+    else:
+        return A.Compose(
+            [A.Normalize(mean=[0.0], std=[1.0]), ToTensorV2()],
+            bbox_params=A.BboxParams(format="pascal_voc"),
+        )
+
+
 class NFLDataset(Dataset):
     def __init__(
         self,
@@ -207,19 +228,7 @@ class NFLDataset(Dataset):
         self.preprocess_csv()
         self.paths2images = {}
 
-        self.train_aug = A.Compose(
-            [
-                A.HorizontalFlip(p=0.5),
-                A.ShiftScaleRotate(p=0.5),
-                A.RandomBrightnessContrast(
-                    brightness_limit=(-0.1, 0.1), contrast_limit=(-0.1, 0.1), p=0.5
-                ),
-                A.Normalize(mean=[0.0], std=[1.0]),
-                ToTensorV2(),
-            ]
-        )
-
-        self.valid_aug = A.Compose([A.Normalize(mean=[0.0], std=[1.0]), ToTensorV2()])
+        self.aug = build_data_aug(mode)
 
     def preprocess_video(self):
         cmds = []
@@ -237,15 +246,11 @@ class NFLDataset(Dataset):
             print(p.map(run_video_cmd, cmds))
 
     def preprocess_csv(self):
-        self.frame = self.labels["frame"].values
-        # feature_cols = [c + "_1" for c in USE_COLS]
-        # feature_cols += [c + "_2" for c in USE_COLS]
-        # feature_cols += ["distance"]
-        # feature_cols += ["G_flug"]
-        feature_cols = USE_COLS
-        self.feature = self.labels[feature_cols].fillna(-1).values.astype(np.float32)
-        self.players = self.labels[["nfl_player_id_1", "nfl_player_id_2"]].values
-        self.game_play = self.labels.game_play.values
+        # self.frame = self.labels["frame"].values
+        # self.players = self.labels[["nfl_player_id_1", "nfl_player_id_2"]].values
+        # self.game_play = self.labels.game_play.values
+        self.features = self.labels[USE_COLS + ["game_play", "frame"]].fillna(-1)
+        self.game_play_frame = self.labels[["game_play", "frame"]].drop_duplicates().values
 
         if len(os.listdir(self.frames_folder)) == 0:
             print("Extracting frames from scratch ...")
@@ -255,10 +260,7 @@ class NFLDataset(Dataset):
 
         print("Mapping videos to frames")
         video_start_end = (
-            self.labels.groupby(["game_play"])
-            .agg({"frame": ["min", "max"]})
-            .reset_index()
-            .values
+            self.labels.groupby(["game_play"]).agg({"frame": ["min", "max"]}).reset_index().values
         )
         self.video2frames = {}
         self.image_paths = []
@@ -275,140 +277,224 @@ class NFLDataset(Dataset):
                 self.video2frames[video] = end_idx
                 self.image_paths.extend(
                     [
-                        os.path.join(
-                            self.frames_folder, video, f"{video}_{idx:04d}.jpg"
-                        )
+                        os.path.join(self.frames_folder, video, f"{video}_{idx:04d}.jpg")
                         for idx in range(start_idx - 5, end_idx + 1)
                     ]
                 )
 
     def __len__(self):
-        return len(self.labels)
+        # return len(self.labels)
+        return len(self.game_play_frame)
 
     def __getitem__(self, idx):
         window = self.num_frames // 2 * self.frame_steps
-        frame = self.frame[idx]
+        # frame = self.frame[idx]
 
+        game_play, frame = self.game_play_frame[idx]
+        labels = self.labels[
+            (self.labels["game_play"] == game_play) & (self.labels["frame"] == frame)
+        ]
+        features = self.features[
+            (self.features["game_play"] == game_play) & (self.features["frame"] == frame)
+        ][USE_COLS].values.astype(np.float32)
+        # temporally shift frame
         if self.mode == "train":
             frame = frame + random.randint(-5, 5)
+        window_frames = np.arange(frame - window, frame + window + 1, 1)
 
-        players = []
-        for p in self.players[idx]:
-            if p == "G":
-                players.append(p)
-            else:
-                players.append(int(p))
-
+        pairs = labels[["nfl_player_id_1", "nfl_player_id_2"]].values
         imgs = []
         for view in ["Endzone", "Sideline"]:
-            video = self.game_play[idx] + f"_{view}.mp4"
+            video = game_play + f"_{view}.mp4"
+            img = []
+            for f in range(frame - window, frame + window + 1, self.frame_steps):
+                f = min(f, self.video2frames[video])
+                img_path = os.path.join(self.frames_folder, video, f"{video}_{f:04d}.jpg")
+                img.append(read_image(img_path))
+            imgs.append(np.stack(img, -1))
+        img_h, img_w = imgs[0].shape[:-1]
 
-            # tmp = self.video2helmets[video]
+        pairs_bboxes = []
+
+        for view in ["Endzone", "Sideline"]:
+            video = game_play + f"_{view}.mp4"
             tmp = self.helmets.loc[video].reset_index()
             tmp = tmp.query("@frame-@window<=frame<=@frame+@window")
-            tmp = tmp[
-                tmp.nfl_player_id.isin(players)
-            ]  # .sort_values(['nfl_player_id', 'frame'])
-            tmp_frames = tmp.frame.values
-            tmp = tmp.groupby("frame")[["left", "width", "top", "height"]].mean()
-
-            bboxes = []
-            for f in range(frame - window, frame + window + 1, 1):
-                if f in tmp_frames:
-                    x, w, y, h = tmp.loc[f][["left", "width", "top", "height"]]
-                    bboxes.append([x, w, y, h])
-                else:
-                    bboxes.append([np.nan, np.nan, np.nan, np.nan])
-            bboxes = pd.DataFrame(bboxes).interpolate(limit_direction="both").values
-            bboxes = bboxes[:: self.frame_steps]
-
-            if bboxes.sum() > 0:
-                flag = 1
-            else:
-                flag = 0
-
-            for i, f in enumerate(
-                range(frame - window, frame + window + 1, self.frame_steps)
-            ):
-                if self.use_heatmap:
-                    # using heatmap
-                    img_new = np.zeros(
-                        (self.img_height, self.img_width), dtype=np.float32
-                    )
-                else:
-                    # using crop
-                    img_new = np.zeros((self.size, self.size), dtype=np.float32)
-
-                if flag == 1 and f <= self.video2frames[video]:
-                    img = read_image(
-                        os.path.join(self.frames_folder, video, f"{video}_{f:04d}.jpg")
-                    )
-                    if (
-                        img.shape[0] != self.img_height
-                        and img.shape[1] != self.img_width
-                    ):
-                        img = cv2.resize(img, (self.img_width, self.img_height))
-
-                    x, w, y, h = bboxes[i]
-                    img = img[
-                        int(y + h / 2)
-                        - self.size // 2 : int(y + h / 2)
-                        + self.size // 2,
-                        int(x + w / 2)
-                        - self.size // 2 : int(x + w / 2)
-                        + self.size // 2,
-                    ]
-                    img_new[: img.shape[0], : img.shape[1]] = img
-
-                    if self.use_heatmap:
-                        # using heatmap
-                        img_new = img * self.heatmap
-                        # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
+            players_bboxes = []
+            for pair, label in zip(pairs, labels.contact.values):
+                players = []
+                for p in pair:
+                    if p == "G":
+                        players.append(p)
                     else:
-                        # using crop
-                        img = img[
-                            int(y + h / 2)
-                            - self.size // 2 : int(y + h / 2)
-                            + self.size // 2,
-                            int(x + w / 2)
-                            - self.size // 2 : int(x + w / 2)
-                            + self.size // 2,
-                        ]
-                        img_new[: img.shape[0], : img.shape[1]] = img
+                        players.append(int(p))
 
-                imgs.append(img_new)
+                tmp_players = tmp[tmp.nfl_player_id.isin(players)]
+                tmp_frames = tmp_players.frame.values
+                # Aggregate 2 players' boxes
+                tmp_players = tmp_players.groupby("frame")[
+                    ["left", "width", "top", "height"]
+                ].mean()
+                # Aggregate frames' boxes
+                bboxes = []
+                for f in window_frames:
+                    if f in tmp_frames:
+                        x, w, y, h = tmp_players.loc[f][["left", "width", "top", "height"]]
+                        bboxes.append([x, w, y, h])
+                    else:
+                        bboxes.append([np.nan, np.nan, np.nan, np.nan])
+                bboxes = pd.DataFrame(bboxes).interpolate(limit_direction="both").values
+                frame_bbox = bboxes[window_frames == frame][0]
+                # To xyxy
+                if frame_bbox.sum() > 0:
+                    x, w, y, h = frame_bbox
+                    frame_bbox = [
+                        np.clip(int(x + w / 2) - self.size // 2, 0, img_w),
+                        np.clip(int(y + h / 2) - self.size // 2, 0, img_h),
+                        np.clip(int(x + w / 2) + self.size // 2, 0, img_w),
+                        np.clip(int(y + h / 2) + self.size // 2, 0, img_h),
+                        label,
+                    ]
+                else:
+                    frame_bbox = [0, 0, 1, 1, label]
 
-        feature = torch.from_numpy(self.feature[idx])
+                players_bboxes.append(frame_bbox)
+            pairs_bboxes.append(np.array(players_bboxes))
 
-        img = np.array(imgs).transpose(1, 2, 0)
-        if self.mode == "train":
-            img = self.train_aug(image=img)["image"]
-        else:
-            img = self.valid_aug(image=img)["image"]
+        endzone = self.aug(image=imgs[0], bboxes=pairs_bboxes[0])
+        sideline = self.aug(image=imgs[1], bboxes=pairs_bboxes[1])
 
-        label = self.labels.contact.values[idx]
-
-        return {"images": img, "features": feature, "labels": label}
+        return {
+            "images0": endzone["image"],
+            "boxes0": torch.from_numpy(np.array(endzone["bboxes"])[:, :4]).float(),
+            "images1": sideline["image"],
+            "boxes1": torch.from_numpy(np.array(sideline["bboxes"])[:, :4]).float(),
+            "features": torch.from_numpy(features),
+            "labels": torch.from_numpy(labels.contact.values),
+        }
 
 
 def collate_fn(batch):
-    images, labels, features = [], [], []
+    images0, boxes0, images1, boxes1, features, labels = [], [], [], [], [], []
 
-    for f in batch:
-        images.append(f["images"])
-        features.append(f["features"])
-        labels.append(f["labels"])
+    for idx, item in enumerate(batch):
+        batch_idx = torch.ones((len(item["boxes0"]), 1)) * idx
+        images0.append(item["images0"])
+        boxes0.append(torch.cat([item["boxes0"], batch_idx], 1))
+        images1.append(item["images1"])
+        boxes1.append(torch.cat([item["boxes1"], batch_idx], 1))
+        features.append(item["features"])
+        labels.append(item["labels"])
 
-    images = torch.stack(images)
-    features = torch.stack(features)
-    labels = torch.as_tensor(labels)
-
-    batch = {
-        "images": images,
-        "features": features,
-        "labels": labels,
+    return {
+        "images0": torch.stack(images0),
+        "boxes0": torch.cat(boxes0),
+        "images1": torch.stack(images1),
+        "boxes1": torch.cat(boxes1),
+        "features": torch.cat(features),
+        "labels": torch.cat(labels),
     }
-    return batch
+
+    # players = []
+    # for p in self.players[idx]:
+    #     if p == "G":
+    #         players.append(p)
+    #     else:
+    #         players.append(int(p))
+
+    # imgs = []
+    # for view in ["Endzone", "Sideline"]:
+    #     video = self.game_play[idx] + f"_{view}.mp4"
+
+    #     # tmp = self.video2helmets[video]
+    #     tmp = self.helmets.loc[video].reset_index()
+    #     tmp = tmp.query("@frame-@window<=frame<=@frame+@window")
+    #     tmp = tmp[tmp.nfl_player_id.isin(players)]  # .sort_values(['nfl_player_id', 'frame'])
+    #     tmp_frames = tmp.frame.values
+    #     tmp = tmp.groupby("frame")[["left", "width", "top", "height"]].mean()
+
+    #     bboxes = []
+    #     for f in range(frame - window, frame + window + 1, 1):
+    #         if f in tmp_frames:
+    #             x, w, y, h = tmp.loc[f][["left", "width", "top", "height"]]
+    #             bboxes.append([x, w, y, h])
+    #         else:
+    #             bboxes.append([np.nan, np.nan, np.nan, np.nan])
+    #     bboxes = pd.DataFrame(bboxes).interpolate(limit_direction="both").values
+    #     bboxes = bboxes[:: self.frame_steps]
+
+    #     if bboxes.sum() > 0:
+    #         flag = 1
+    #     else:
+    #         flag = 0
+
+    #     for i, f in enumerate(range(frame - window, frame + window + 1, self.frame_steps)):
+    #         if self.use_heatmap:
+    #             # using heatmap
+    #             img_new = np.zeros((self.img_height, self.img_width), dtype=np.float32)
+    #         else:
+    #             # using crop
+    #             img_new = np.zeros((self.size, self.size), dtype=np.float32)
+
+    #         if flag == 1 and f <= self.video2frames[video]:
+    #             img = read_image(
+    #                 os.path.join(self.frames_folder, video, f"{video}_{f:04d}.jpg")
+    #             )
+    #             if img.shape[0] != self.img_height and img.shape[1] != self.img_width:
+    #                 img = cv2.resize(img, (self.img_width, self.img_height))
+
+    #             x, w, y, h = bboxes[i]
+    #             img = img[
+    #                 int(y + h / 2) - self.size // 2 : int(y + h / 2) + self.size // 2,
+    #                 int(x + w / 2) - self.size // 2 : int(x + w / 2) + self.size // 2,
+    #             ]
+    #             img_new[: img.shape[0], : img.shape[1]] = img
+
+    #             if self.use_heatmap:
+    #                 # using heatmap
+    #                 img_new = img * self.heatmap
+    #                 # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
+    #             else:
+    #                 # using crop
+    #                 img = img[
+    #                     int(y + h / 2) - self.size // 2 : int(y + h / 2) + self.size // 2,
+    #                     int(x + w / 2) - self.size // 2 : int(x + w / 2) + self.size // 2,
+    #                 ]
+    #                 img_new[: img.shape[0], : img.shape[1]] = img
+
+    #         imgs.append(img_new)
+
+    # feature = torch.from_numpy(self.feature[idx])
+
+    # img = np.array(imgs).transpose(1, 2, 0)
+    # if self.mode == "train":
+    #     img = self.train_aug(image=img)["image"]
+    # else:
+    #     img = self.valid_aug(image=img)["image"]
+
+    # label = self.labels.contact.values[idx]
+
+    # return {"images": img, "features": feature, "labels": label}
+
+
+# def collate_fn(batch):
+#     images, labels, features = [], [], []
+
+#     for f in batch:
+#         images.append(f["images"])
+#         features.append(f["features"])
+#         labels.append(f["labels"])
+
+#     images = torch.stack(images)
+#     features = torch.stack(features)
+#     labels = torch.as_tensor(labels)
+
+#     batch = {
+#         "images": images,
+#         "features": features,
+#         "labels": labels,
+#     }
+#     return batch
 
 
 if __name__ == "__main__":

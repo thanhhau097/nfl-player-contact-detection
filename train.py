@@ -79,7 +79,7 @@ def main():
         img_height=data_args.img_height,
         img_width=data_args.img_width,
         use_heatmap=data_args.use_heatmap,
-        heatmap_sigma=data_args.heatmap_sigma
+        heatmap_sigma=data_args.heatmap_sigma,
     )
 
     val_dataset = NFLDataset(
@@ -94,26 +94,26 @@ def main():
         img_height=data_args.img_height,
         img_width=data_args.img_width,
         use_heatmap=data_args.use_heatmap,
-        heatmap_sigma=data_args.heatmap_sigma
+        heatmap_sigma=data_args.heatmap_sigma,
     )
 
-    # Pre-load images
-    train_dataset.paths2images.update(
-        dict(
-            Parallel(n_jobs=30, verbose=1)(
-                delayed(read_image)(image_path)
-                for image_path in train_dataset.image_paths[: data_args.num_cache]
-            )
-        )
-    )
-    val_dataset.paths2images.update(
-        dict(
-            Parallel(n_jobs=30, verbose=1)(
-                delayed(read_image)(image_path)
-                for image_path in val_dataset.image_paths
-            )
-        )
-    )
+    # # Pre-load images
+    # train_dataset.paths2images.update(
+    #     dict(
+    #         Parallel(n_jobs=30, verbose=1)(
+    #             delayed(read_image)(image_path)
+    #             for image_path in train_dataset.image_paths[: data_args.num_cache]
+    #         )
+    #     )
+    # )
+    # val_dataset.paths2images.update(
+    #     dict(
+    #         Parallel(n_jobs=30, verbose=1)(
+    #             delayed(read_image)(image_path)
+    #             for image_path in val_dataset.image_paths
+    #         )
+    #     )
+    # )
 
     # Initialize trainer
     model = Model(model_args.model_name, in_chans=data_args.num_frames)
