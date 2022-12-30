@@ -258,7 +258,12 @@ class NFLDataset(Dataset):
             print("Extracting frames from scratch ...")
             self.preprocess_video()
 
-        self.helmets = self.helmets.set_index("video")
+        self.video2helmets = {}
+        helmets_new = self.helmets.set_index("video")
+        for video in tqdm(self.helmets.video.unique()):
+            self.video2helmets[video] = helmets_new.loc[video].reset_index(drop=True)
+        
+        del helmets_new
 
         print("Mapping videos to frames")
         video_start_end = (
@@ -288,7 +293,7 @@ class NFLDataset(Dataset):
                         for idx in range(start_idx - 5, end_idx + 1)
                     ]
                 )
-
+    
     def __len__(self):
         return len(self.labels)
 
@@ -307,17 +312,26 @@ class NFLDataset(Dataset):
                 players.append(int(p))
 
         imgs = []
+        # import time
         for view in ["Endzone", "Sideline"]:
+            # start = time.time()
             video = self.game_play[idx] + f"_{view}.mp4"
 
-            # tmp = self.video2helmets[video]
-            tmp = self.helmets.loc[video].reset_index()
-            tmp = tmp.query("@frame-@window<=frame<=@frame+@window")
+            # tmp = self.helmets.loc[video].reset_index()
+            tmp = self.video2helmets[video]
+            # print("self.helmets.loc time", time.time() - start)
+            # start = time.time()
+            tmp = tmp[tmp['frame'].between(frame-window, frame+window)] # tmp.query("@frame-@window<=frame<=@frame+@window")
+            # print("tmp.query time", time.time() - start)
+            # start = time.time()
+
             tmp = tmp[
                 tmp.nfl_player_id.isin(players)
             ]  # .sort_values(['nfl_player_id', 'frame'])
             tmp_frames = tmp.frame.values
             tmp = tmp.groupby("frame")[["left", "width", "top", "height"]].mean()
+            # print("tmp.groupby time", time.time() - start)
+            # start = time.time()
 
             bboxes = []
             for f in range(frame - window, frame + window + 1, 1):
@@ -333,6 +347,9 @@ class NFLDataset(Dataset):
                 flag = 1
             else:
                 flag = 0
+            
+            # print("box processing time", time.time() - start)
+            # start = time.time()
 
             for i, f in enumerate(
                 range(frame - window, frame + window + 1, self.frame_steps)
@@ -381,7 +398,10 @@ class NFLDataset(Dataset):
                         img_new[: img.shape[0], : img.shape[1]] = img
 
                 imgs.append(img_new)
+            # print("image reading time", time.time() - start)
+            # print("------------------------")
 
+        # start = time.time()
         feature = torch.from_numpy(self.feature[idx])
 
         img = np.array(imgs).transpose(1, 2, 0).astype(np.uint8)
@@ -391,7 +411,8 @@ class NFLDataset(Dataset):
             img = self.valid_aug(image=img)["image"]
 
         label = self.labels.contact.values[idx]
-
+        # print("augmentation time", time.time() - start)
+        # print("--------------------------------------------------------------------------------")
         return {"images": img, "features": feature, "labels": label}
 
 
