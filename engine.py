@@ -2,7 +2,7 @@ from typing import Dict
 
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import roc_auc_score, matthews_corrcoef
+from sklearn.metrics import matthews_corrcoef, roc_auc_score
 from transformers import Trainer
 from transformers.trainer_pt_utils import nested_detach
 
@@ -10,9 +10,9 @@ from model import Model
 
 
 class CustomTrainer(Trainer):
-    def compute_loss(self, model: Model, inputs: Dict, return_outputs=False):
+    def compute_loss(self, model: Model, inputs: Dict[str, torch.Tensor], return_outputs=False):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        outputs = model(inputs["images"].to(device), inputs["features"].to(device))
+        outputs = model({k: v.to(device, non_blocking=True) for k, v in inputs.items()})
         loss_fct = F.binary_cross_entropy_with_logits
         labels = inputs.get("labels")
         loss = loss_fct(outputs.view(-1), labels.float())
@@ -39,30 +39,22 @@ class CustomTrainer(Trainer):
         optimizer_grouped_parameters = [
             {
                 "params": [
-                    p
-                    for n, p in model.named_parameters()
-                    if not any(nd in n for nd in no_decay)
+                    p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)
                 ],
                 "weight_decay": self.args.weight_decay,
             },
             {
                 "params": [
-                    p
-                    for n, p in model.named_parameters()
-                    if any(nd in n for nd in no_decay)
+                    p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)
                 ],
                 "weight_decay": 0.0,
             },
         ]
-        optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(
-            self.args
-        )
+        optimizer_cls, optimizer_kwargs = Trainer.get_optimizer_cls_and_kwargs(self.args)
         self.optimizer = optimizer_cls(optimizer_grouped_parameters, **optimizer_kwargs)
         return self.optimizer
 
-    def prediction_step(
-        self, model, inputs, prediction_loss_only=False, ignore_keys=None
-    ):
+    def prediction_step(self, model, inputs, prediction_loss_only=False, ignore_keys=None):
         inputs = self._prepare_inputs(inputs)
         with torch.no_grad():
             with self.compute_loss_context_manager():
@@ -73,8 +65,8 @@ class CustomTrainer(Trainer):
             return (loss, None, None)
         outputs = outputs.float()
         outputs = nested_detach(outputs)
-        del inputs["images"]
-        del inputs["features"]
+        # del inputs["images"]
+        # del inputs["features"]
         return loss, outputs, inputs["labels"]
 
 
@@ -100,9 +92,7 @@ def pfbeta_torch(labels, preds, beta=1):
     c_recall = ctp / y_true_count
     if c_precision > 0 and c_recall > 0:
         result = (
-            (1 + beta_squared)
-            * (c_precision * c_recall)
-            / (beta_squared * c_precision + c_recall)
+            (1 + beta_squared) * (c_precision * c_recall) / (beta_squared * c_precision + c_recall)
         )
         return result
     else:
