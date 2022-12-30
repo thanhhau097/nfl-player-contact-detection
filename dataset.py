@@ -237,7 +237,7 @@ class NFLDataset(Dataset):
                         # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
                     else:
                         # using crop
-                        img = img[int(y+h/2) - self.size // 2:int(y+h/2)+self.size // 2,int(x+w/2)-self.size // 2:int(x+w/2)+self.size // 2].copy()
+                        img = img[int(y+h/2) - self.size // 2:int(y+h/2)+self.size // 2,int(x+w/2)-self.size // 2:int(x+w/2)+self.size // 2]
                         img_new[:img.shape[0], :img.shape[1]] = img
 
                 imgs.append(img_new)
