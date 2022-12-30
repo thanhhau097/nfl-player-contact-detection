@@ -1,6 +1,4 @@
 import os
-import gc
-import glob
 import random
 import subprocess
 from multiprocessing import Pool
@@ -11,14 +9,144 @@ import numpy as np
 import pandas as pd
 import torch
 from albumentations.pytorch import ToTensorV2
-import subprocess
-from turbojpeg import TurboJPEG, TJPF_GRAY
-from PIL import Image
 from torch.utils.data import Dataset
 from tqdm import tqdm
+from turbojpeg import TJPF_GRAY, TurboJPEG
 
-# from generate_features import USE_COLS
-USE_COLS = ['x_position_1', 'y_position_1', 'speed_1', 'distance_1', 'direction_1', 'orientation_1', 'acceleration_1', 'sa_1', 'x_position_2', 'y_position_2', 'speed_2', 'distance_2', 'direction_2', 'orientation_2', 'acceleration_2', 'sa_2', 'distance', 'G_flug', 'left_Sideline_10_1', 'width_Sideline_10_1', 'top_Sideline_10_1', 'height_Sideline_10_1', 'left_Sideline_10_2', 'width_Sideline_10_2', 'top_Sideline_10_2', 'height_Sideline_10_2', 'left_Endzone_10_1', 'width_Endzone_10_1', 'top_Endzone_10_1', 'height_Endzone_10_1', 'left_Endzone_10_2', 'width_Endzone_10_2', 'top_Endzone_10_2', 'height_Endzone_10_2', 'left_Sideline_50_1', 'width_Sideline_50_1', 'top_Sideline_50_1', 'height_Sideline_50_1', 'left_Sideline_50_2', 'width_Sideline_50_2', 'top_Sideline_50_2', 'height_Sideline_50_2', 'left_Endzone_50_1', 'width_Endzone_50_1', 'top_Endzone_50_1', 'height_Endzone_50_1', 'left_Endzone_50_2', 'width_Endzone_50_2', 'top_Endzone_50_2', 'height_Endzone_50_2', 'left_Sideline_100_1', 'width_Sideline_100_1', 'top_Sideline_100_1', 'height_Sideline_100_1', 'left_Sideline_100_2', 'width_Sideline_100_2', 'top_Sideline_100_2', 'height_Sideline_100_2', 'left_Endzone_100_1', 'width_Endzone_100_1', 'top_Endzone_100_1', 'height_Endzone_100_1', 'left_Endzone_100_2', 'width_Endzone_100_2', 'top_Endzone_100_2', 'height_Endzone_100_2', 'left_Sideline_500_1', 'width_Sideline_500_1', 'top_Sideline_500_1', 'height_Sideline_500_1', 'left_Sideline_500_2', 'width_Sideline_500_2', 'top_Sideline_500_2', 'height_Sideline_500_2', 'left_Endzone_500_1', 'width_Endzone_500_1', 'top_Endzone_500_1', 'height_Endzone_500_1', 'left_Endzone_500_2', 'width_Endzone_500_2', 'top_Endzone_500_2', 'height_Endzone_500_2', 'x_position_diff', 'y_position_diff', 'speed_diff', 'distance_diff', 'direction_diff', 'orientation_diff', 'acceleration_diff', 'sa_diff', 'left_Sideline_10_diff', 'width_Sideline_10_diff', 'top_Sideline_10_diff', 'height_Sideline_10_diff', 'left_Endzone_10_diff', 'width_Endzone_10_diff', 'top_Endzone_10_diff', 'height_Endzone_10_diff', 'left_Sideline_50_diff', 'width_Sideline_50_diff', 'top_Sideline_50_diff', 'height_Sideline_50_diff', 'left_Endzone_50_diff', 'width_Endzone_50_diff', 'top_Endzone_50_diff', 'height_Endzone_50_diff', 'left_Sideline_100_diff', 'width_Sideline_100_diff', 'top_Sideline_100_diff', 'height_Sideline_100_diff', 'left_Endzone_100_diff', 'width_Endzone_100_diff', 'top_Endzone_100_diff', 'height_Endzone_100_diff', 'left_Sideline_500_diff', 'width_Sideline_500_diff', 'top_Sideline_500_diff', 'height_Sideline_500_diff', 'left_Endzone_500_diff', 'width_Endzone_500_diff', 'top_Endzone_500_diff', 'height_Endzone_500_diff', 'x_position_prod', 'y_position_prod', 'speed_prod', 'distance_prod', 'direction_prod', 'orientation_prod', 'acceleration_prod', 'sa_prod']
+turbo_jpeg = TurboJPEG()
+
+USE_COLS = [
+    "x_position_1",
+    "y_position_1",
+    "speed_1",
+    "distance_1",
+    "direction_1",
+    "orientation_1",
+    "acceleration_1",
+    "sa_1",
+    "x_position_2",
+    "y_position_2",
+    "speed_2",
+    "distance_2",
+    "direction_2",
+    "orientation_2",
+    "acceleration_2",
+    "sa_2",
+    "distance",
+    "G_flug",
+    "left_Sideline_10_1",
+    "width_Sideline_10_1",
+    "top_Sideline_10_1",
+    "height_Sideline_10_1",
+    "left_Sideline_10_2",
+    "width_Sideline_10_2",
+    "top_Sideline_10_2",
+    "height_Sideline_10_2",
+    "left_Endzone_10_1",
+    "width_Endzone_10_1",
+    "top_Endzone_10_1",
+    "height_Endzone_10_1",
+    "left_Endzone_10_2",
+    "width_Endzone_10_2",
+    "top_Endzone_10_2",
+    "height_Endzone_10_2",
+    "left_Sideline_50_1",
+    "width_Sideline_50_1",
+    "top_Sideline_50_1",
+    "height_Sideline_50_1",
+    "left_Sideline_50_2",
+    "width_Sideline_50_2",
+    "top_Sideline_50_2",
+    "height_Sideline_50_2",
+    "left_Endzone_50_1",
+    "width_Endzone_50_1",
+    "top_Endzone_50_1",
+    "height_Endzone_50_1",
+    "left_Endzone_50_2",
+    "width_Endzone_50_2",
+    "top_Endzone_50_2",
+    "height_Endzone_50_2",
+    "left_Sideline_100_1",
+    "width_Sideline_100_1",
+    "top_Sideline_100_1",
+    "height_Sideline_100_1",
+    "left_Sideline_100_2",
+    "width_Sideline_100_2",
+    "top_Sideline_100_2",
+    "height_Sideline_100_2",
+    "left_Endzone_100_1",
+    "width_Endzone_100_1",
+    "top_Endzone_100_1",
+    "height_Endzone_100_1",
+    "left_Endzone_100_2",
+    "width_Endzone_100_2",
+    "top_Endzone_100_2",
+    "height_Endzone_100_2",
+    "left_Sideline_500_1",
+    "width_Sideline_500_1",
+    "top_Sideline_500_1",
+    "height_Sideline_500_1",
+    "left_Sideline_500_2",
+    "width_Sideline_500_2",
+    "top_Sideline_500_2",
+    "height_Sideline_500_2",
+    "left_Endzone_500_1",
+    "width_Endzone_500_1",
+    "top_Endzone_500_1",
+    "height_Endzone_500_1",
+    "left_Endzone_500_2",
+    "width_Endzone_500_2",
+    "top_Endzone_500_2",
+    "height_Endzone_500_2",
+    "x_position_diff",
+    "y_position_diff",
+    "speed_diff",
+    "distance_diff",
+    "direction_diff",
+    "orientation_diff",
+    "acceleration_diff",
+    "sa_diff",
+    "left_Sideline_10_diff",
+    "width_Sideline_10_diff",
+    "top_Sideline_10_diff",
+    "height_Sideline_10_diff",
+    "left_Endzone_10_diff",
+    "width_Endzone_10_diff",
+    "top_Endzone_10_diff",
+    "height_Endzone_10_diff",
+    "left_Sideline_50_diff",
+    "width_Sideline_50_diff",
+    "top_Sideline_50_diff",
+    "height_Sideline_50_diff",
+    "left_Endzone_50_diff",
+    "width_Endzone_50_diff",
+    "top_Endzone_50_diff",
+    "height_Endzone_50_diff",
+    "left_Sideline_100_diff",
+    "width_Sideline_100_diff",
+    "top_Sideline_100_diff",
+    "height_Sideline_100_diff",
+    "left_Endzone_100_diff",
+    "width_Endzone_100_diff",
+    "top_Endzone_100_diff",
+    "height_Endzone_100_diff",
+    "left_Sideline_500_diff",
+    "width_Sideline_500_diff",
+    "top_Sideline_500_diff",
+    "height_Sideline_500_diff",
+    "left_Endzone_500_diff",
+    "width_Endzone_500_diff",
+    "top_Endzone_500_diff",
+    "height_Endzone_500_diff",
+    "x_position_prod",
+    "y_position_prod",
+    "speed_prod",
+    "distance_prod",
+    "direction_prod",
+    "orientation_prod",
+    "acceleration_prod",
+    "sa_prod",
+]
 
 
 def run_video_cmd(cmd):
@@ -28,8 +156,8 @@ def run_video_cmd(cmd):
 
 
 def gaussian2D(shape, sigma=1):
-    m, n = [(ss - 1.) / 2. for ss in shape]
-    y, x = np.ogrid[-m:m+1,-n:n+1]
+    m, n = [(ss - 1.0) / 2.0 for ss in shape]
+    y, x = np.ogrid[-m : m + 1, -n : n + 1]
 
     h = np.exp(-(x * x + y * y) / (2 * sigma * sigma))
     h[h < np.finfo(h.dtype).eps * h.max()] = 0
@@ -37,7 +165,7 @@ def gaussian2D(shape, sigma=1):
 
 
 def read_image(path: str):
-    return path, np.array(Image.open(path).convert("L"))
+    return turbo_jpeg.decode(open(path, "rb").read(), pixel_format=TJPF_GRAY)[:, :, 0]
 
 
 class NFLDataset(Dataset):
@@ -55,7 +183,7 @@ class NFLDataset(Dataset):
         img_height=720,
         img_width=1280,
         use_heatmap=False,
-        heatmap_sigma=128
+        heatmap_sigma=128,
     ):
         self.labels = labels_df
         self.helmets = helmets
@@ -71,7 +199,6 @@ class NFLDataset(Dataset):
         self.sigma = heatmap_sigma
         self.use_heatmap = use_heatmap
         self.heatmap = gaussian2D((self.img_height, self.img_width), self.sigma)
-        self.turbo_jpeg = TurboJPEG()
 
         if not os.path.exists(frames_folder):
             os.makedirs(frames_folder, exist_ok=True)
@@ -116,7 +243,7 @@ class NFLDataset(Dataset):
         # feature_cols += ["distance"]
         # feature_cols += ["G_flug"]
         feature_cols = USE_COLS
-        self.feature = self.labels[feature_cols].fillna(-1).values
+        self.feature = self.labels[feature_cols].fillna(-1).values.astype(np.float32)
         self.players = self.labels[["nfl_player_id_1", "nfl_player_id_2"]].values
         self.game_play = self.labels.game_play.values
 
@@ -199,25 +326,28 @@ class NFLDataset(Dataset):
                 flag = 1
             else:
                 flag = 0
-            
-            for i, f in enumerate(range(frame-window, frame+window+1, self.frame_steps)):
+
+            for i, f in enumerate(
+                range(frame - window, frame + window + 1, self.frame_steps)
+            ):
                 if self.use_heatmap:
                     # using heatmap
-                    img_new = np.zeros((self.img_height, self.img_width), dtype=np.float32)
+                    img_new = np.zeros(
+                        (self.img_height, self.img_width), dtype=np.float32
+                    )
                 else:
                     # using crop
                     img_new = np.zeros((self.size, self.size), dtype=np.float32)
 
                 if flag == 1 and f <= self.video2frames[video]:
-                    # img = cv2.imread(os.path.join(self.frames_folder, video, f'{video}_{f:04d}.jpg'), 0)
-                    img = self.paths2images.get(os.path.join(self.frames_folder, video, f'{video}_{f:04d}.jpg'))
-
-                    if img is None:
-                        with open(os.path.join(self.frames_folder, video, f'{video}_{f:04d}.jpg'), 'rb') as in_file:
-                            img = self.turbo_jpeg.decode(in_file.read(), pixel_format=TJPF_GRAY)[:, : , 0]
-
-                        if img.shape[0] != self.img_height and img.shape[1] != self.img_width:
-                            img = cv2.resize(img, (self.img_width, self.img_height))
+                    img = read_image(
+                        os.path.join(self.frames_folder, video, f"{video}_{f:04d}.jpg")
+                    )
+                    if (
+                        img.shape[0] != self.img_height
+                        and img.shape[1] != self.img_width
+                    ):
+                        img = cv2.resize(img, (self.img_width, self.img_height))
 
                     x, w, y, h = bboxes[i]
                     img = img[
@@ -230,19 +360,25 @@ class NFLDataset(Dataset):
                     ]
                     img_new[: img.shape[0], : img.shape[1]] = img
 
-
                     if self.use_heatmap:
                         # using heatmap
                         img_new = img * self.heatmap
                         # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
                     else:
                         # using crop
-                        img = img[int(y+h/2) - self.size // 2:int(y+h/2)+self.size // 2,int(x+w/2)-self.size // 2:int(x+w/2)+self.size // 2]
-                        img_new[:img.shape[0], :img.shape[1]] = img
+                        img = img[
+                            int(y + h / 2)
+                            - self.size // 2 : int(y + h / 2)
+                            + self.size // 2,
+                            int(x + w / 2)
+                            - self.size // 2 : int(x + w / 2)
+                            + self.size // 2,
+                        ]
+                        img_new[: img.shape[0], : img.shape[1]] = img
 
                 imgs.append(img_new)
 
-        feature = np.float32(self.feature[idx])
+        feature = torch.from_numpy(self.feature[idx])
 
         img = np.array(imgs).transpose(1, 2, 0)
         if self.mode == "train":
@@ -250,7 +386,7 @@ class NFLDataset(Dataset):
         else:
             img = self.valid_aug(image=img)["image"]
 
-        label = np.float32(self.labels.contact.values[idx])
+        label = self.labels.contact.values[idx]
 
         return {"images": img, "features": feature, "labels": label}
 
@@ -264,8 +400,8 @@ def collate_fn(batch):
         labels.append(f["labels"])
 
     images = torch.stack(images)
-    features = torch.as_tensor(np.array(features))
-    labels = torch.as_tensor(np.array(labels))
+    features = torch.stack(features)
+    labels = torch.as_tensor(labels)
 
     batch = {
         "images": images,
