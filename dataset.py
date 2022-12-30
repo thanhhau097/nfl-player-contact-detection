@@ -352,8 +352,6 @@ class NFLDataset(Dataset):
                     )
                     x, w, y, h = bboxes[i]
 
-                   
-
                     if self.use_heatmap:
                         if (img.shape[0] != self.img_height and img.shape[1] != self.img_width):
                             img = cv2.resize(img, (self.img_width, self.img_height))
@@ -365,8 +363,10 @@ class NFLDataset(Dataset):
                             h = int(h * self.img_height / 720)
                         # using heatmap
                         # create new heatmap at a specific location
-                        heatmap = self.heatmap[self.img_height - int(y): 2 * self.img_height - int(y), self.img_width - int(x): 2 * self.img_width - int(x)]
-                        img_new = (img * heatmap).astype(np.uint8)
+                        center_x = int(x + w / 2)
+                        center_y = int(y + h / 2)
+                        heatmap = self.heatmap[self.img_height - center_y: 2 * self.img_height - center_y, self.img_width - center_x: 2 * self.img_width - center_x]
+                        img_new = (img * heatmap) # .astype(np.uint8)
                         # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
                     else:
                         # using crop
@@ -384,7 +384,7 @@ class NFLDataset(Dataset):
 
         feature = torch.from_numpy(self.feature[idx])
 
-        img = np.array(imgs).transpose(1, 2, 0)
+        img = np.array(imgs).transpose(1, 2, 0).astype(np.uint8)
         if self.mode == "train":
             img = self.train_aug(image=img)["image"]
         else:
