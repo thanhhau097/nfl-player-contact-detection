@@ -198,7 +198,7 @@ class NFLDataset(Dataset):
         self.img_height = img_height
         self.sigma = heatmap_sigma
         self.use_heatmap = use_heatmap
-        self.heatmap = gaussian2D((self.img_height, self.img_width), self.sigma)
+        self.heatmap = gaussian2D((self.img_height * 2, self.img_width * 2), self.sigma)
 
         if not os.path.exists(frames_folder):
             os.makedirs(frames_folder, exist_ok=True)
@@ -227,11 +227,18 @@ class NFLDataset(Dataset):
             if not os.path.exists(os.path.join(self.frames_folder, video)):
                 os.makedirs(os.path.join(self.frames_folder, video), exist_ok=True)
             # "-q:v 2 -vf format=gray"
-            cmds.append(
-                f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -f image2 "
-                f"{os.path.join(self.frames_folder, video, video)}_%04d.jpg -hide_banner "
-                "-loglevel error"
-            )
+            if self.use_heatmap:
+                cmds.append(
+                    f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -s {self.img_width}x{self.img_height} -f image2 "
+                    f"{os.path.join(self.frames_folder, video, video)}_%04d.jpg -hide_banner "
+                    "-loglevel error"
+                )
+            else:
+                cmds.append(
+                    f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -f image2 "
+                    f"{os.path.join(self.frames_folder, video, video)}_%04d.jpg -hide_banner "
+                    "-loglevel error"
+                )
 
         with Pool(32) as p:
             print(p.map(run_video_cmd, cmds))
@@ -343,26 +350,23 @@ class NFLDataset(Dataset):
                     img = read_image(
                         os.path.join(self.frames_folder, video, f"{video}_{f:04d}.jpg")
                     )
-                    if (
-                        img.shape[0] != self.img_height
-                        and img.shape[1] != self.img_width
-                    ):
-                        img = cv2.resize(img, (self.img_width, self.img_height))
-
                     x, w, y, h = bboxes[i]
-                    img = img[
-                        int(y + h / 2)
-                        - self.size // 2 : int(y + h / 2)
-                        + self.size // 2,
-                        int(x + w / 2)
-                        - self.size // 2 : int(x + w / 2)
-                        + self.size // 2,
-                    ]
-                    img_new[: img.shape[0], : img.shape[1]] = img
+
+                   
 
                     if self.use_heatmap:
+                        if (img.shape[0] != self.img_height and img.shape[1] != self.img_width):
+                            img = cv2.resize(img, (self.img_width, self.img_height))
+
+                        if self.img_height != 720 or self.img_width != 1280: # raw w and h is 1280 and 720
+                            x = int(x * self.img_width / 1280)
+                            y = int(y * self.img_height / 720)
+                            w = int(w * self.img_width / 1280)
+                            h = int(h * self.img_height / 720)
                         # using heatmap
-                        img_new = img * self.heatmap
+                        # create new heatmap at a specific location
+                        heatmap = self.heatmap[self.img_height - int(y): 2 * self.img_height - int(y), self.img_width - int(x): 2 * self.img_width - int(x)]
+                        img_new = (img * heatmap).astype(np.uint8)
                         # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
                     else:
                         # using crop
