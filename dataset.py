@@ -256,7 +256,10 @@ class NFLDataset(Dataset):
             print("Extracting frames from scratch ...")
             self.preprocess_video()
 
-        self.helmets = self.helmets.set_index("video")
+        self.video2helmets = {}
+        helmets_new = self.helmets.set_index("video")
+        for video in tqdm(self.helmets.video.unique()):
+            self.video2helmets[video] = helmets_new.loc[video].reset_index(drop=True)
 
         print("Mapping videos to frames")
         video_start_end = (
@@ -318,7 +321,7 @@ class NFLDataset(Dataset):
 
         for view in ["Endzone", "Sideline"]:
             video = game_play + f"_{view}.mp4"
-            tmp = self.helmets.loc[video].reset_index()
+            tmp = self.video2helmets[video]
             tmp = tmp.query("@frame-@window<=frame<=@frame+@window")
             players_bboxes = []
             for pair, label in zip(pairs, labels.contact.values):
