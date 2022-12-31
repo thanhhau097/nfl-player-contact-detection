@@ -331,7 +331,6 @@ class NFLDataset(Dataset):
                         players.append(p)
                     else:
                         players.append(int(p))
-
                 tmp_players = tmp[tmp.nfl_player_id.isin(players)]
                 tmp_frames = tmp_players.frame.values
                 # Aggregate 2 players' boxes
@@ -340,9 +339,13 @@ class NFLDataset(Dataset):
                 ].mean()
                 # Aggregate frames' boxes
                 bboxes = []
+                tmp_players_frame_dict = {}
+                for i, r in tmp_players.iterrows():
+                    tmp_players_frame_dict[i] = r.values
+
                 for f in window_frames:
                     if f in tmp_frames:
-                        x, w, y, h = tmp_players.loc[f][["left", "width", "top", "height"]]
+                        x, w, y, h = tmp_players_frame_dict[f]
                         bboxes.append([x, w, y, h])
                     else:
                         bboxes.append([np.nan, np.nan, np.nan, np.nan])
@@ -397,107 +400,6 @@ def collate_fn(batch):
         "features": torch.cat(features),
         "labels": torch.cat(labels),
     }
-
-    # players = []
-    # for p in self.players[idx]:
-    #     if p == "G":
-    #         players.append(p)
-    #     else:
-    #         players.append(int(p))
-
-    # imgs = []
-    # for view in ["Endzone", "Sideline"]:
-    #     video = self.game_play[idx] + f"_{view}.mp4"
-
-    #     # tmp = self.video2helmets[video]
-    #     tmp = self.helmets.loc[video].reset_index()
-    #     tmp = tmp.query("@frame-@window<=frame<=@frame+@window")
-    #     tmp = tmp[tmp.nfl_player_id.isin(players)]  # .sort_values(['nfl_player_id', 'frame'])
-    #     tmp_frames = tmp.frame.values
-    #     tmp = tmp.groupby("frame")[["left", "width", "top", "height"]].mean()
-
-    #     bboxes = []
-    #     for f in range(frame - window, frame + window + 1, 1):
-    #         if f in tmp_frames:
-    #             x, w, y, h = tmp.loc[f][["left", "width", "top", "height"]]
-    #             bboxes.append([x, w, y, h])
-    #         else:
-    #             bboxes.append([np.nan, np.nan, np.nan, np.nan])
-    #     bboxes = pd.DataFrame(bboxes).interpolate(limit_direction="both").values
-    #     bboxes = bboxes[:: self.frame_steps]
-
-    #     if bboxes.sum() > 0:
-    #         flag = 1
-    #     else:
-    #         flag = 0
-
-    #     for i, f in enumerate(range(frame - window, frame + window + 1, self.frame_steps)):
-    #         if self.use_heatmap:
-    #             # using heatmap
-    #             img_new = np.zeros((self.img_height, self.img_width), dtype=np.float32)
-    #         else:
-    #             # using crop
-    #             img_new = np.zeros((self.size, self.size), dtype=np.float32)
-
-    #         if flag == 1 and f <= self.video2frames[video]:
-    #             img = read_image(
-    #                 os.path.join(self.frames_folder, video, f"{video}_{f:04d}.jpg")
-    #             )
-    #             if img.shape[0] != self.img_height and img.shape[1] != self.img_width:
-    #                 img = cv2.resize(img, (self.img_width, self.img_height))
-
-    #             x, w, y, h = bboxes[i]
-    #             img = img[
-    #                 int(y + h / 2) - self.size // 2 : int(y + h / 2) + self.size // 2,
-    #                 int(x + w / 2) - self.size // 2 : int(x + w / 2) + self.size // 2,
-    #             ]
-    #             img_new[: img.shape[0], : img.shape[1]] = img
-
-    #             if self.use_heatmap:
-    #                 # using heatmap
-    #                 img_new = img * self.heatmap
-    #                 # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
-    #             else:
-    #                 # using crop
-    #                 img = img[
-    #                     int(y + h / 2) - self.size // 2 : int(y + h / 2) + self.size // 2,
-    #                     int(x + w / 2) - self.size // 2 : int(x + w / 2) + self.size // 2,
-    #                 ]
-    #                 img_new[: img.shape[0], : img.shape[1]] = img
-
-    #         imgs.append(img_new)
-
-    # feature = torch.from_numpy(self.feature[idx])
-
-    # img = np.array(imgs).transpose(1, 2, 0)
-    # if self.mode == "train":
-    #     img = self.train_aug(image=img)["image"]
-    # else:
-    #     img = self.valid_aug(image=img)["image"]
-
-    # label = self.labels.contact.values[idx]
-
-    # return {"images": img, "features": feature, "labels": label}
-
-
-# def collate_fn(batch):
-#     images, labels, features = [], [], []
-
-#     for f in batch:
-#         images.append(f["images"])
-#         features.append(f["features"])
-#         labels.append(f["labels"])
-
-#     images = torch.stack(images)
-#     features = torch.stack(features)
-#     labels = torch.as_tensor(labels)
-
-#     batch = {
-#         "images": images,
-#         "features": features,
-#         "labels": labels,
-#     }
-#     return batch
 
 
 if __name__ == "__main__":
