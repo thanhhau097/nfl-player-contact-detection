@@ -12,6 +12,7 @@ from albumentations.pytorch import ToTensorV2
 from torch.utils.data import Dataset
 from tqdm import tqdm
 from turbojpeg import TJPF_GRAY, TurboJPEG
+import time
 
 turbo_jpeg = TurboJPEG()
 
@@ -293,6 +294,28 @@ class NFLDataset(Dataset):
                         for idx in range(start_idx - 5, end_idx + 1)
                     ]
                 )
+        
+        paths2image_file = f"_{self.mode}_{self.size}_paths2image.pth"
+        if os.path.isfile(paths2image_file):
+            print(f"Load paths2image from {paths2image_file}")
+            self.paths2image = torch.load(paths2image_file)
+        else:
+            self.paths2image = {}
+            for idx in tqdm(range(len(self.labels))):
+                window = self.num_frames // 2 * self.frame_steps
+                frame = self.frame[idx]
+                for view in ["Endzone", "Sideline"]:
+                    for i, f in enumerate(
+                        range(frame - window, frame + window + 1, self.frame_steps)
+                    ): 
+                        video = self.game_play[idx] + f"_{view}.mp4"
+                        path = os.path.join(self.frames_folder, video, f"{video}_{min(f, self.video2frames[video]):04d}.jpg")
+                        if path not in self.paths2image:
+                            self.paths2image[path] = cv2.resize(read_image(path), (self.size, self.size))
+            print(f"Save paths2image to {paths2image_file}")
+            torch.save(self.paths2image, paths2image_file)
+            
+
     
     def __len__(self):
         return len(self.labels)
@@ -301,8 +324,8 @@ class NFLDataset(Dataset):
         window = self.num_frames // 2 * self.frame_steps
         frame = self.frame[idx]
 
-        if self.mode == "train":
-            frame = frame + random.randint(-5, 5)
+        # if self.mode == "train":
+        #     frame = frame + random.randint(-5, 5)
 
         players = []
         for p in self.players[idx]:
@@ -314,88 +337,97 @@ class NFLDataset(Dataset):
         imgs = []
         # import time
         for view in ["Endzone", "Sideline"]:
-            # start = time.time()
+            start = time.time()
             video = self.game_play[idx] + f"_{view}.mp4"
-
-            # tmp = self.helmets.loc[video].reset_index()
-            tmp = self.video2helmets[video]
-            # print("self.helmets.loc time", time.time() - start)
-            # start = time.time()
-            tmp = tmp[tmp['frame'].between(frame-window, frame+window)] # tmp.query("@frame-@window<=frame<=@frame+@window")
-            # print("tmp.query time", time.time() - start)
-            # start = time.time()
-
-            tmp = tmp[
-                tmp.nfl_player_id.isin(players)
-            ]  # .sort_values(['nfl_player_id', 'frame'])
-            tmp_frames = tmp.frame.values
-            tmp = tmp.groupby("frame")[["left", "width", "top", "height"]].mean()
-            # print("tmp.groupby time", time.time() - start)
-            # start = time.time()
-
-            bboxes = []
-            for f in range(frame - window, frame + window + 1, 1):
-                if f in tmp_frames:
-                    x, w, y, h = tmp.loc[f][["left", "width", "top", "height"]]
-                    bboxes.append([x, w, y, h])
-                else:
-                    bboxes.append([np.nan, np.nan, np.nan, np.nan])
-            bboxes = pd.DataFrame(bboxes).interpolate(limit_direction="both").values
-            bboxes = bboxes[:: self.frame_steps]
-
-            if bboxes.sum() > 0:
-                flag = 1
-            else:
-                flag = 0
-            
-            # print("box processing time", time.time() - start)
-            # start = time.time()
-
             for i, f in enumerate(
                 range(frame - window, frame + window + 1, self.frame_steps)
-            ):
-                if self.use_heatmap:
-                    # using heatmap
-                    img_new = np.zeros(
-                        (self.img_height, self.img_width), dtype=np.float32
-                    )
-                else:
-                    # using crop
-                    img_new = np.zeros((self.size, self.size), dtype=np.float32)
+            ):  
+                path = os.path.join(self.frames_folder, video, f"{video}_{min(f, self.video2frames[video]):04d}.jpg")
+                # if path not in self.paths2image:
+                #     self.paths2image[path] = cv2.resize(read_image(path), (self.size, self.size))
+                img_new = self.paths2image[path]
+            # # tmp = self.helmets.loc[video].reset_index()
+            # tmp = self.video2helmets[video]
+            # # print("self.helmets.loc time", time.time() - start)
+            # # start = time.time()
+            # tmp = tmp[tmp['frame'].between(frame-window, frame+window)] # tmp.query("@frame-@window<=frame<=@frame+@window")
+            # # print("tmp.query time", time.time() - start)
+            # # start = time.time()
 
-                if flag == 1 and f <= self.video2frames[video]:
-                    img = read_image(
-                        os.path.join(self.frames_folder, video, f"{video}_{f:04d}.jpg")
-                    )
-                    x, w, y, h = bboxes[i]
+            # tmp = tmp[
+            #     tmp.nfl_player_id.isin(players)
+            # ]  # .sort_values(['nfl_player_id', 'frame'])
+            # tmp_frames = tmp.frame.values
+            # tmp = tmp.groupby("frame")[["left", "width", "top", "height"]].mean()
+            # # print("tmp.groupby time", time.time() - start)
+            # # start = time.time()
 
-                    if self.use_heatmap:
-                        if (img.shape[0] != self.img_height and img.shape[1] != self.img_width):
-                            img = cv2.resize(img, (self.img_width, self.img_height))
+            # bboxes = []
+            # for f in range(frame - window, frame + window + 1, 1):
+            #     if f in tmp_frames:
+            #         x, w, y, h = tmp.loc[f][["left", "width", "top", "height"]]
+            #         bboxes.append([x, w, y, h])
+            #     else:
+            #         bboxes.append([np.nan, np.nan, np.nan, np.nan])
+            # bboxes = pd.DataFrame(bboxes).interpolate(limit_direction="both").values
+            # bboxes = bboxes[:: self.frame_steps]
 
-                        if self.img_height != 720 or self.img_width != 1280: # raw w and h is 1280 and 720
-                            x = int(x * self.img_width / 1280)
-                            y = int(y * self.img_height / 720)
-                            w = int(w * self.img_width / 1280)
-                            h = int(h * self.img_height / 720)
-                        # using heatmap
-                        # create new heatmap at a specific location
-                        center_x = int(x + w / 2)
-                        center_y = int(y + h / 2)
-                        heatmap = self.heatmap[self.img_height - center_y: 2 * self.img_height - center_y, self.img_width - center_x: 2 * self.img_width - center_x]
-                        img_new = (img * heatmap) # .astype(np.uint8)
-                        # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
-                    else:
-                        # using crop
-                        img = img[
-                            int(y + h / 2)
-                            - self.size // 2 : int(y + h / 2)
-                            + self.size // 2,
-                            int(x + w / 2)
-                            - self.size // 2 : int(x + w / 2)
-                            + self.size // 2,
-                        ]
-                        img_new[: img.shape[0], : img.shape[1]] = img
+            # if bboxes.sum() > 0:
+            #     flag = 1
+            # else:
+            #     flag = 0
+            
+            # # print("box processing time", time.time() - start)
+            # # start = time.time()
+
+            # for i, f in enumerate(
+            #     range(frame - window, frame + window + 1, self.frame_steps)
+            # ):
+            #     if self.use_heatmap:
+            #         # using heatmap
+            #         img_new = np.zeros(
+            #             (self.img_height, self.img_width), dtype=np.float32
+            #         )
+            #     else:
+            #         # using crop
+            #         img_new = np.zeros((self.size, self.size), dtype=np.float32)
+
+            #     if flag == 1 and f <= self.video2frames[video]:
+            #         img = read_image(
+            #             os.path.join(self.frames_folder, video, f"{video}_{f:04d}.jpg")
+            #         )
+            #         x, w, y, h = bboxes[i]
+
+            #         if self.use_heatmap:
+            #             if (img.shape[0] != self.img_height and img.shape[1] != self.img_width):
+            #                 img = cv2.resize(img, (self.img_width, self.img_height))
+
+            #             if self.img_height != 720 or self.img_width != 1280: # raw w and h is 1280 and 720
+            #                 x = int(x * self.img_width / 1280)
+            #                 y = int(y * self.img_height / 720)
+            #                 w = int(w * self.img_width / 1280)
+            #                 h = int(h * self.img_height / 720)
+            #             # using heatmap
+            #             # create new heatmap at a specific location
+            #             center_x = int(x + w / 2)
+            #             center_y = int(y + h / 2)
+            #             heatmap = self.heatmap[self.img_height - center_y: 2 * self.img_height - center_y, self.img_width - center_x: 2 * self.img_width - center_x]
+            #             img_new = (img * heatmap) # .astype(np.uint8)
+            #             # if is rgb: img_new = img * np.stack((self.heatmap,)*3, axis=-1)
+            #         else:
+            #             # using crop
+            #             img = img[
+            #                 int(y + h / 2)
+            #                 - self.size // 2 : int(y + h / 2)
+            #                 + self.size // 2,
+            #                 int(x + w / 2)
+            #                 - self.size // 2 : int(x + w / 2)
+            #                 + self.size // 2,
+            #             ]
+            #             img_new[: img.shape[0], : img.shape[1]] = img
+
+
+
 
                 imgs.append(img_new)
             # print("image reading time", time.time() - start)
@@ -405,10 +437,11 @@ class NFLDataset(Dataset):
         feature = torch.from_numpy(self.feature[idx])
 
         img = np.array(imgs).transpose(1, 2, 0).astype(np.uint8)
-        if self.mode == "train":
-            img = self.train_aug(image=img)["image"]
-        else:
-            img = self.valid_aug(image=img)["image"]
+        # if self.mode == "train":
+        #     img = self.train_aug(image=img)["image"]
+        # else:
+        #     img = self.valid_aug(image=img)["image"]
+        img = self.valid_aug(image=img)["image"]
 
         label = self.labels.contact.values[idx]
         # print("augmentation time", time.time() - start)
