@@ -381,33 +381,24 @@ class NFLDataset(Dataset):
             for i, f in enumerate(
                 range(frame - window, frame + window + 1, self.frame_steps)
             ):
-                # using crop
-                img_new = np.zeros((self.size, self.size), dtype=np.float32)
-                if flag == 1 and f <= self.video2frames[video]:
-                    # img = read_image(
-                    #     os.path.join(self.frames_folder, video, f"{video}_{f:04d}.jpg")
-                    # )
-                    path = os.path.join(self.frames_folder, video, f"{video}_{min(f, self.video2frames[video]):04d}.jpg")
-                    # if path not in self.paths2image:
-                    #     self.paths2image[path] = cv2.resize(read_image(path), (self.size, self.size))
-                    # img = self.paths2image[path]
-                    # if i in [0, window//self.frame_steps, 2*window//self.frame_steps]:
-                    if i%2 == 0:
-                        img = self.paths2image[path]
-                        # img_new = cv2.resize(img, ((self.size, self.size)))
-                    else:
-                        img = read_image(path)
-                        x, w, y, h = bboxes[i]
-                        # using crop
-                        img = img[
-                            int(y + h / 2)
-                            - self.size // 2 : int(y + h / 2)
-                            + self.size // 2,
-                            int(x + w / 2)
-                            - self.size // 2 : int(x + w / 2)
-                            + self.size // 2,
-                        ]
-                        img_new[: img.shape[0], : img.shape[1]] = img
+                path = os.path.join(self.frames_folder, video, f"{video}_{min(f, self.video2frames[video]):04d}.jpg")
+                if i%2 == 0 or flag == 0:
+                    img_new = self.paths2image[path]
+                    # img_new = cv2.resize(img, ((self.size, self.size)))
+                else:
+                    img_new = np.zeros((self.size, self.size), dtype=np.float32)
+                    img = read_image(path)
+                    x, w, y, h = bboxes[i]
+                    # using crop
+                    img = img[
+                        int(y + h / 2)
+                        - self.size // 2 : int(y + h / 2)
+                        + self.size // 2,
+                        int(x + w / 2)
+                        - self.size // 2 : int(x + w / 2)
+                        + self.size // 2,
+                    ]
+                    img_new[: img.shape[0], : img.shape[1]] = img
                 imgs.append(img_new)
             
             # print("image reading time", time.time() - start)
