@@ -172,7 +172,7 @@ def build_data_aug(mode: str):
     if mode == "train":
         return A.Compose(
             [
-                A.HorizontalFlip(p=0.5),
+                # A.HorizontalFlip(p=0.5),
                 # A.ShiftScaleRotate(p=0.5),
                 A.RandomBrightnessContrast(
                     brightness_limit=(-0.1, 0.1), contrast_limit=(-0.1, 0.1), p=0.5
@@ -303,7 +303,7 @@ class NFLDataset(Dataset):
         # temporally shift frame
         if self.mode == "train":
             frame = frame + random.randint(-5, 5)
-        window_frames = np.arange(frame - window, frame + window + 1, 1)
+        window_frames = np.arange(frame - window, frame + window + 1, self.frame_steps)
 
         pairs = labels[["nfl_player_id_1", "nfl_player_id_2"]].values
         imgs = []
@@ -343,38 +343,50 @@ class NFLDataset(Dataset):
                 for i, r in tmp_players.iterrows():
                     tmp_players_frame_dict[i] = r.values
 
+                # for f in window_frames:
+                #     if f in tmp_frames:
+                #         x, w, y, h = tmp_players_frame_dict[f]
+                #         bboxes.append([x, w, y, h])
+                #     else:
+                #         bboxes.append([np.nan, np.nan, np.nan, np.nan])
+                # bboxes = pd.DataFrame(bboxes).interpolate(limit_direction="both").values
+                # frame_bbox = bboxes[window_frames == frame][0]
+                # # To xyxy
+                # if frame_bbox.sum() > 0:
+                #     x, w, y, h = frame_bbox
+                #     frame_bbox = [
+                #         np.clip(int(x + w / 2) - self.size // 2, 0, img_w),
+                #         np.clip(int(y + h / 2) - self.size // 2, 0, img_h),
+                #         np.clip(int(x + w / 2) + self.size // 2, 0, img_w),
+                #         np.clip(int(y + h / 2) + self.size // 2, 0, img_h),
+                #         label,
+                #     ]
+                # else:
+                #     frame_bbox = [0, 0, 1, 1, label]
+
                 for f in window_frames:
                     if f in tmp_frames:
                         x, w, y, h = tmp_players_frame_dict[f]
-                        bboxes.append([x, w, y, h])
+                        bboxes.append([x, y, x + w, y + h])
                     else:
-                        bboxes.append([np.nan, np.nan, np.nan, np.nan])
+                        bboxes.append([0, 0, 1, 1])
                 bboxes = pd.DataFrame(bboxes).interpolate(limit_direction="both").values
-                frame_bbox = bboxes[window_frames == frame][0]
-                # To xyxy
-                if frame_bbox.sum() > 0:
-                    x, w, y, h = frame_bbox
-                    frame_bbox = [
-                        np.clip(int(x + w / 2) - self.size // 2, 0, img_w),
-                        np.clip(int(y + h / 2) - self.size // 2, 0, img_h),
-                        np.clip(int(x + w / 2) + self.size // 2, 0, img_w),
-                        np.clip(int(y + h / 2) + self.size // 2, 0, img_h),
-                        label,
-                    ]
-                else:
-                    frame_bbox = [0, 0, 1, 1, label]
+
+                frame_bbox = bboxes
 
                 players_bboxes.append(frame_bbox)
             pairs_bboxes.append(np.array(players_bboxes))
 
-        endzone = self.aug(image=imgs[0], bboxes=pairs_bboxes[0])
-        sideline = self.aug(image=imgs[1], bboxes=pairs_bboxes[1])
+        endzone = self.aug(image=imgs[0], bboxes=np.array([[0, 0, 1, 1, 1]]))
+        sideline = self.aug(image=imgs[1], bboxes=np.array([[0, 0, 1, 1, 1]]))
+        # endzone = self.aug(image=imgs[0])
+        # sideline = self.aug(image=imgs[1])
 
         return {
             "images0": endzone["image"],
-            "boxes0": torch.from_numpy(np.array(endzone["bboxes"])[:, :4]).float(),
+            "boxes0": torch.from_numpy(np.array(pairs_bboxes[0])).float(),
             "images1": sideline["image"],
-            "boxes1": torch.from_numpy(np.array(sideline["bboxes"])[:, :4]).float(),
+            "boxes1": torch.from_numpy(np.array(pairs_bboxes[1])).float(),
             "features": torch.from_numpy(features),
             "labels": torch.from_numpy(labels.contact.values),
         }
@@ -384,11 +396,11 @@ def collate_fn(batch):
     images0, boxes0, images1, boxes1, features, labels = [], [], [], [], [], []
 
     for idx, item in enumerate(batch):
-        batch_idx = torch.ones((len(item["boxes0"]), 1)) * idx
+        batch_idx = torch.ones((item["boxes0"].shape[0], item["boxes0"].shape[1], 1)) * idx
         images0.append(item["images0"])
-        boxes0.append(torch.cat([item["boxes0"], batch_idx], 1))
+        boxes0.append(torch.cat([item["boxes0"], batch_idx], 2))
         images1.append(item["images1"])
-        boxes1.append(torch.cat([item["boxes1"], batch_idx], 1))
+        boxes1.append(torch.cat([item["boxes1"], batch_idx], 2))
         features.append(item["features"])
         labels.append(item["labels"])
 
