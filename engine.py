@@ -1,6 +1,7 @@
 from typing import Dict, Optional, List
 import time
 import math
+import numpy as np
 
 import torch
 import torch.nn.functional as F
@@ -89,6 +90,7 @@ class CustomTrainer(Trainer):
         ignore_keys: Optional[List[str]] = None,
         metric_key_prefix: str = "eval",
     ) -> Dict[str, float]:
+
         torch.save(self.model.state_dict(), "debug_ckpt.pth")
         # memory metrics - must set up as early as possible
         self._memory_tracker.start()
@@ -125,14 +127,18 @@ class CustomTrainer(Trainer):
         return output.metrics
 
 def compute_metrics(eval_preds):
-    predictions = torch.sigmoid(torch.from_numpy(eval_preds.predictions)).numpy()
-    fbeta_score = pfbeta_torch(
-        eval_preds.label_ids[0],
-        predictions,
-    )
+    try:
+        predictions = torch.sigmoid(torch.from_numpy(eval_preds.predictions)).numpy()
+        predictions = np.nan_to_num(predictions)
+        fbeta_score = pfbeta_torch(
+            eval_preds.label_ids[0],
+            predictions,
+        )
 
-    auc = roc_auc_score(eval_preds.label_ids, predictions)
-    score = matthews_corrcoef(eval_preds.label_ids, predictions > 0.5)
+        auc = roc_auc_score(eval_preds.label_ids, predictions)
+        score = matthews_corrcoef(eval_preds.label_ids, predictions > 0.5)
+    except:
+        import pdb;pdb.set_trace()
     return {"pF1": fbeta_score, "AUC": auc, "matthews_corrcoef": score}
 
 

@@ -307,10 +307,10 @@ class NFLDataset(Dataset):
                 frame = self.frame[idx]
                 for view in ["Endzone", "Sideline"]:
                     for i, f in enumerate(
-                        range(frame - window, frame + window + 1, self.frame_steps)
+                        range(frame - window - 5, frame + window + 1 + 5, self.frame_steps)
                     ): 
                         video = self.game_play[idx] + f"_{view}.mp4"
-                        path = os.path.join(self.frames_folder, video, f"{video}_{min(f, self.video2frames[video]):04d}.jpg")
+                        path = os.path.join(self.frames_folder, video, f"{video}_{max(0, min(f, self.video2frames[video])):04d}.jpg")
                         if path not in self.paths2image:
                             self.paths2image[path] = cv2.resize(read_image(path), (self.size, self.size))
             print(f"Save paths2image to {paths2image_file}")
@@ -319,17 +319,14 @@ class NFLDataset(Dataset):
 
     
     def __len__(self):
-        if self.mode == "train":
-            return len(self.labels) // 100
-        else:
-            return len(self.labels)
+        return len(self.labels)
 
     def __getitem__(self, idx):
         window = self.num_frames // 2 * self.frame_steps
         frame = self.frame[idx]
 
-        # if self.mode == "train":
-        #     frame = frame + random.randint(-5, 5)
+        if self.mode == "train":
+            frame = frame + random.randint(-5, 5)
 
         players = []
         for p in self.players[idx]:
@@ -384,7 +381,7 @@ class NFLDataset(Dataset):
             for i, f in enumerate(
                 range(frame - window, frame + window + 1, self.frame_steps)
             ):
-                path = os.path.join(self.frames_folder, video, f"{video}_{min(f, self.video2frames[video]):04d}.jpg")
+                path = os.path.join(self.frames_folder, video, f"{video}_{max(0, min(f, self.video2frames[video])):04d}.jpg")
                 if i%2 == 0 or flag == 0:
                     img_new = self.paths2image[path]
                     # img_new = cv2.resize(img, ((self.size, self.size)))
