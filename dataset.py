@@ -307,7 +307,7 @@ class NFLDataset(Dataset):
                 frame = self.frame[idx]
                 for view in ["Endzone", "Sideline"]:
                     for i, f in enumerate(
-                        range(frame - window - 5, frame + window + 1 + 5, self.frame_steps)
+                        range(frame - window - 5, frame + window + 1 + 5)
                     ): 
                         video = self.game_play[idx] + f"_{view}.mp4"
                         path = os.path.join(self.frames_folder, video, f"{video}_{max(0, min(f, self.video2frames[video])):04d}.jpg")
