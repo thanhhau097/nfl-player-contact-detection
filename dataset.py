@@ -319,7 +319,10 @@ class NFLDataset(Dataset):
 
     
     def __len__(self):
-        return len(self.labels)
+        if self.mode == "train":
+            return len(self.labels) // 100
+        else:
+            return len(self.labels)
 
     def __getitem__(self, idx):
         window = self.num_frames // 2 * self.frame_steps

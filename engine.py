@@ -1,10 +1,16 @@
-from typing import Dict
+from typing import Dict, Optional, List
+import time
+import math
 
 import torch
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score, matthews_corrcoef
 from transformers import Trainer
 from transformers.trainer_pt_utils import nested_detach
+from transformers.trainer_utils import PredictionOutput, speed_metrics
+from transformers.debug_utils import DebugOption
+from torch.utils.data import Dataset
+
 
 from model import Model
 
@@ -77,6 +83,46 @@ class CustomTrainer(Trainer):
         del inputs["features"]
         return loss, outputs, inputs["labels"]
 
+    def evaluate(
+        self,
+        eval_dataset: Optional[Dataset] = None,
+        ignore_keys: Optional[List[str]] = None,
+        metric_key_prefix: str = "eval",
+    ) -> Dict[str, float]:
+        torch.save(self.model.state_dict(), "debug_ckpt.pth")
+        # memory metrics - must set up as early as possible
+        self._memory_tracker.start()
+
+        eval_dataloader = self.get_eval_dataloader(eval_dataset)
+        start_time = time.time()
+
+        eval_loop = self.prediction_loop if self.args.use_legacy_prediction_loop else self.evaluation_loop
+        output = eval_loop(
+            eval_dataloader,
+            description="Evaluation",
+            # No point gathering the predictions if there are no metrics, otherwise we defer to
+            # self.args.prediction_loss_only
+            prediction_loss_only=True if self.compute_metrics is None else None,
+            ignore_keys=ignore_keys,
+            metric_key_prefix=metric_key_prefix,
+        )
+
+        total_batch_size = self.args.eval_batch_size * self.args.world_size
+        output.metrics.update(
+            speed_metrics(
+                metric_key_prefix,
+                start_time,
+                num_samples=output.num_samples,
+                num_steps=math.ceil(output.num_samples / total_batch_size),
+            )
+        )
+
+        self.log(output.metrics)
+        self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, output.metrics)
+
+        self._memory_tracker.stop_and_update_metrics(output.metrics)
+
+        return output.metrics
 
 def compute_metrics(eval_preds):
     predictions = torch.sigmoid(torch.from_numpy(eval_preds.predictions)).numpy()
