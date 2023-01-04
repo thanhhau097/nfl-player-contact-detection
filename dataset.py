@@ -249,7 +249,7 @@ class NFLDataset(Dataset):
         # self.frame = self.labels["frame"].values
         # self.players = self.labels[["nfl_player_id_1", "nfl_player_id_2"]].values
         # self.game_play = self.labels.game_play.values
-        self.features = self.labels[USE_COLS + ["game_play", "frame"]].fillna(-1)
+        # self.features = self.labels[USE_COLS + ["game_play", "frame"]].fillna(-1)
         self.game_play_frame = self.labels[["game_play", "frame"]].drop_duplicates().values
 
         if len(os.listdir(self.frames_folder)) == 0:
@@ -297,9 +297,7 @@ class NFLDataset(Dataset):
         labels = self.labels[
             (self.labels["game_play"] == game_play) & (self.labels["frame"] == frame)
         ]
-        features = self.features[
-            (self.features["game_play"] == game_play) & (self.features["frame"] == frame)
-        ][USE_COLS].values.astype(np.float32)
+        features = labels[USE_COLS].fillna(-1).values.astype(np.float32)
         # temporally shift frame
         if self.mode == "train":
             frame = frame + random.randint(-5, 5)
@@ -378,6 +376,77 @@ class NFLDataset(Dataset):
             "features": torch.from_numpy(features),
             "labels": torch.from_numpy(labels.contact.values),
         }
+
+
+class NFLSeqDataset(NFLDataset):
+    def __init__(
+        self,
+        labels_df: pd.DataFrame,
+        helmets: pd.DataFrame,
+        video_folder: str,
+        frames_folder: str,
+        mode: str = "train",
+        fold: int = 0,
+        size: int = 256,
+        num_frames: int = 13,
+        frame_steps: int = 4,
+        img_height=720,
+        img_width=1280,
+        use_heatmap=False,
+        heatmap_sigma=128,
+    ):
+        super().__init__(
+            labels_df,
+            helmets,
+            video_folder,
+            frames_folder,
+            mode,
+            fold,
+            size,
+            num_frames,
+            frame_steps,
+            img_height,
+            img_width,
+            use_heatmap,
+            heatmap_sigma,
+        )
+
+    def preprocess_csv(self):
+        self.seq_ids = (
+            self.labels[["game_play", "nfl_player_id_1", "nfl_player_id_2"]]
+            .drop_duplicates()
+            .values
+        )
+
+    def __len__(self):
+        return len(self.seq_ids)
+
+    def __getitem__(self, idx):
+        game_play, nfl_id1, nfl_id2 = self.seq_ids[idx]
+        labels = self.labels[
+            (self.labels["game_play"] == game_play)
+            & (self.labels["nfl_player_id_1"] == nfl_id1)
+            & (self.labels["nfl_player_id_2"] == nfl_id2)
+        ]
+        features = labels[USE_COLS].fillna(-1).values.astype(np.float32)
+        contact_labels = labels["contact"].values.tolist()
+        return {"features": torch.from_numpy(features), "labels": contact_labels}
+
+
+def pad_seq(seq, max_batch_len, pad_value=-100):
+    return seq + (max_batch_len - len(seq)) * [pad_value]
+
+
+def collate_pad_fn(batch):
+    max_length = max([len(item["features"]) for item in batch])
+    features, labels = [], []
+
+    for item in batch:
+        L, C = item["features"].shape
+        features.append(torch.cat([item["features"], torch.zeros((max_length - L, C))]))
+        labels.append(torch.tensor(pad_seq(item["labels"], max_length)))
+
+    return {"features": torch.stack(features), "labels": torch.stack(labels)}
 
 
 def collate_fn(batch):
