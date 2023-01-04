@@ -173,7 +173,7 @@ def build_data_aug(mode: str):
         return A.Compose(
             [
                 A.HorizontalFlip(p=0.5),
-                # A.ShiftScaleRotate(p=0.5),
+                # A.ShiftScaleRotate(shift_limit=0.05, scale_limit=0.05, rotate_limit=10, p=0.5),
                 A.RandomBrightnessContrast(
                     brightness_limit=(-0.1, 0.1), contrast_limit=(-0.1, 0.1), p=0.5
                 ),
@@ -303,7 +303,7 @@ class NFLDataset(Dataset):
         # temporally shift frame
         if self.mode == "train":
             frame = frame + random.randint(-5, 5)
-        window_frames = np.arange(frame - window, frame + window + 1, 1)
+        window_frames = np.arange(frame - window, frame + window + 1, self.frame_steps)
 
         pairs = labels[["nfl_player_id_1", "nfl_player_id_2"]].values
         imgs = []
