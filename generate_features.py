@@ -4,6 +4,7 @@ from typing import List
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import GroupKFold
 
 USE_COLS = [
     "x_position",
@@ -92,20 +93,18 @@ def main(csv_folder: str):
     labels_df = pd.read_csv(os.path.join(csv_folder, "train_labels.csv"))
     tracking = pd.read_csv(os.path.join(csv_folder, "train_player_tracking.csv"))
     helmets = pd.read_csv(os.path.join(csv_folder, "train_baseline_helmets.csv"))
-    # split fold
-    labels_df["game_key"] = pd.to_numeric(labels_df["game_play"].str.split("_").str[0])
-    random.seed(42)
-    game_keys = list(set(labels_df.game_key.values))
-    random.shuffle(game_keys)
-    fold_dict = {}
+    # # split fold
+    # labels_df["game_key"] = pd.to_numeric(labels_df["game_play"].str.split("_").str[0])
+    # random.seed(42)
+    # game_keys = list(set(labels_df.game_key.values))
+    # random.shuffle(game_keys)
+    # fold_dict = {}
     # N = 10
     # F = 15
-    N = 30
-    F = 5
-    for i in range(F):
-        keys = game_keys[i * N : (i + 1) * N]
-        for k in keys:
-            fold_dict[k] = i
+    # for i in range(F):
+    #     keys = game_keys[i * N : (i + 1) * N]
+    #     for k in keys:
+    #         fold_dict[k] = i
 
     labels_df["fold"] = labels_df["game_key"].map(fold_dict)
     helmets["fold"] = helmets["game_key"].map(fold_dict)
@@ -197,6 +196,15 @@ def main(csv_folder: str):
 
     features_csv_path = os.path.join(csv_folder, "train_features.csv")
     helmets_csv_path = os.path.join(csv_folder, "train_baseline_helmets_kfold.csv")
+
+    kf = GroupKFold(n_splits=5)
+    labels_df["fold"] = -1
+    helmets["fold"] = -1
+    for i, (_, val_idxs) in enumerate(kf.split(df, df["contact"], df["game_play"])):
+        df.loc[val_idxs, ["fold"]] = i
+        game_plays = df[df["fold"] == i]["game_play"].unique()
+        helmets.loc[helmets["game_play"].isin(game_plays), ["fold"]] = i
+
     df.to_csv(features_csv_path, index=False)
     helmets.to_csv(helmets_csv_path, index=False)
     print("Saved features df and helmets df")
