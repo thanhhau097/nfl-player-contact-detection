@@ -106,8 +106,8 @@ def main(csv_folder: str):
     #     for k in keys:
     #         fold_dict[k] = i
 
-    labels_df["fold"] = labels_df["game_key"].map(fold_dict)
-    helmets["fold"] = helmets["game_key"].map(fold_dict)
+    # labels_df["fold"] = labels_df["game_key"].map(fold_dict)
+    # helmets["fold"] = helmets["game_key"].map(fold_dict)
 
     print("Creating features...")
     labels_df = expand_contact_id(labels_df)
