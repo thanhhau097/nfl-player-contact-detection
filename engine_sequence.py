@@ -1,7 +1,9 @@
+from functools import partial
 from typing import Dict
 
 import torch
 import torch.nn.functional as F
+from torchvision.ops import sigmoid_focal_loss
 from transformers import Trainer
 from transformers.trainer_pt_utils import nested_detach
 
@@ -13,13 +15,13 @@ class CustomTrainer(Trainer):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         outputs = model(inputs["features"].to(device, non_blocking=True))
         loss_fct = F.binary_cross_entropy_with_logits
+        # loss_fct = partial(
+        #     F.binary_cross_entropy_with_logits, pos_weight=torch.FloatTensor([10.0]).to(device)
+        # )
         labels = inputs.get("labels").to(device, non_blocking=True)
-        keep_mask = labels != -100
-        labels = labels[keep_mask]
-        outputs = outputs[keep_mask]
-        loss = loss_fct(outputs, labels.float())
+        loss = loss_fct(outputs[labels != -100], labels[labels != -100].float())
         if return_outputs:
-            return (loss, outputs, labels)
+            return (loss, outputs)
         return loss
 
     def create_optimizer(self):
@@ -60,12 +62,11 @@ class CustomTrainer(Trainer):
         inputs = self._prepare_inputs(inputs)
         with torch.no_grad():
             with self.compute_loss_context_manager():
-                loss, outputs, labels = self.compute_loss(model, inputs, return_outputs=True)
+                loss, outputs = self.compute_loss(model, inputs, return_outputs=True)
                 loss = loss.mean().detach()
 
         if prediction_loss_only:
             return (loss, None, None)
         outputs = outputs.float()
         outputs = nested_detach(outputs)
-        labels = nested_detach(labels)
-        return loss, outputs, labels
+        return loss, outputs, inputs["labels"]
