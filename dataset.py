@@ -13,141 +13,9 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from turbojpeg import TJPF_GRAY, TurboJPEG
 import time
+from generate_features import USE_COLS
 
 turbo_jpeg = TurboJPEG()
-
-USE_COLS = [
-    "x_position_1",
-    "y_position_1",
-    "speed_1",
-    "distance_1",
-    "direction_1",
-    "orientation_1",
-    "acceleration_1",
-    "sa_1",
-    "x_position_2",
-    "y_position_2",
-    "speed_2",
-    "distance_2",
-    "direction_2",
-    "orientation_2",
-    "acceleration_2",
-    "sa_2",
-    "distance",
-    "G_flug",
-    "left_Sideline_10_1",
-    "width_Sideline_10_1",
-    "top_Sideline_10_1",
-    "height_Sideline_10_1",
-    "left_Sideline_10_2",
-    "width_Sideline_10_2",
-    "top_Sideline_10_2",
-    "height_Sideline_10_2",
-    "left_Endzone_10_1",
-    "width_Endzone_10_1",
-    "top_Endzone_10_1",
-    "height_Endzone_10_1",
-    "left_Endzone_10_2",
-    "width_Endzone_10_2",
-    "top_Endzone_10_2",
-    "height_Endzone_10_2",
-    "left_Sideline_50_1",
-    "width_Sideline_50_1",
-    "top_Sideline_50_1",
-    "height_Sideline_50_1",
-    "left_Sideline_50_2",
-    "width_Sideline_50_2",
-    "top_Sideline_50_2",
-    "height_Sideline_50_2",
-    "left_Endzone_50_1",
-    "width_Endzone_50_1",
-    "top_Endzone_50_1",
-    "height_Endzone_50_1",
-    "left_Endzone_50_2",
-    "width_Endzone_50_2",
-    "top_Endzone_50_2",
-    "height_Endzone_50_2",
-    "left_Sideline_100_1",
-    "width_Sideline_100_1",
-    "top_Sideline_100_1",
-    "height_Sideline_100_1",
-    "left_Sideline_100_2",
-    "width_Sideline_100_2",
-    "top_Sideline_100_2",
-    "height_Sideline_100_2",
-    "left_Endzone_100_1",
-    "width_Endzone_100_1",
-    "top_Endzone_100_1",
-    "height_Endzone_100_1",
-    "left_Endzone_100_2",
-    "width_Endzone_100_2",
-    "top_Endzone_100_2",
-    "height_Endzone_100_2",
-    "left_Sideline_500_1",
-    "width_Sideline_500_1",
-    "top_Sideline_500_1",
-    "height_Sideline_500_1",
-    "left_Sideline_500_2",
-    "width_Sideline_500_2",
-    "top_Sideline_500_2",
-    "height_Sideline_500_2",
-    "left_Endzone_500_1",
-    "width_Endzone_500_1",
-    "top_Endzone_500_1",
-    "height_Endzone_500_1",
-    "left_Endzone_500_2",
-    "width_Endzone_500_2",
-    "top_Endzone_500_2",
-    "height_Endzone_500_2",
-    "x_position_diff",
-    "y_position_diff",
-    "speed_diff",
-    "distance_diff",
-    "direction_diff",
-    "orientation_diff",
-    "acceleration_diff",
-    "sa_diff",
-    "left_Sideline_10_diff",
-    "width_Sideline_10_diff",
-    "top_Sideline_10_diff",
-    "height_Sideline_10_diff",
-    "left_Endzone_10_diff",
-    "width_Endzone_10_diff",
-    "top_Endzone_10_diff",
-    "height_Endzone_10_diff",
-    "left_Sideline_50_diff",
-    "width_Sideline_50_diff",
-    "top_Sideline_50_diff",
-    "height_Sideline_50_diff",
-    "left_Endzone_50_diff",
-    "width_Endzone_50_diff",
-    "top_Endzone_50_diff",
-    "height_Endzone_50_diff",
-    "left_Sideline_100_diff",
-    "width_Sideline_100_diff",
-    "top_Sideline_100_diff",
-    "height_Sideline_100_diff",
-    "left_Endzone_100_diff",
-    "width_Endzone_100_diff",
-    "top_Endzone_100_diff",
-    "height_Endzone_100_diff",
-    "left_Sideline_500_diff",
-    "width_Sideline_500_diff",
-    "top_Sideline_500_diff",
-    "height_Sideline_500_diff",
-    "left_Endzone_500_diff",
-    "width_Endzone_500_diff",
-    "top_Endzone_500_diff",
-    "height_Endzone_500_diff",
-    "x_position_prod",
-    "y_position_prod",
-    "speed_prod",
-    "distance_prod",
-    "direction_prod",
-    "orientation_prod",
-    "acceleration_prod",
-    "sa_prod",
-]
 
 
 def run_video_cmd(cmd):
@@ -210,6 +78,7 @@ class NFLDataset(Dataset):
 
         self.train_aug = A.Compose(
             [
+                # A.Resize(size, size),
                 A.HorizontalFlip(p=0.5),
                 A.ShiftScaleRotate(p=0.5),
                 A.RandomBrightnessContrast(
@@ -246,11 +115,11 @@ class NFLDataset(Dataset):
 
     def preprocess_csv(self):
         self.frame = self.labels["frame"].values
-        # feature_cols = [c + "_1" for c in USE_COLS]
-        # feature_cols += [c + "_2" for c in USE_COLS]
-        # feature_cols += ["distance"]
-        # feature_cols += ["G_flug"]
-        feature_cols = USE_COLS
+        feature_cols = [c + "_1" for c in USE_COLS]
+        feature_cols += [c + "_2" for c in USE_COLS]
+        feature_cols += ["distance"]
+        feature_cols += ["G_flug"]
+        # feature_cols = USE_COLS
         self.feature = self.labels[feature_cols].fillna(-1).values.astype(np.float32)
         self.players = self.labels[["nfl_player_id_1", "nfl_player_id_2"]].values
         self.game_play = self.labels.game_play.values
@@ -295,26 +164,32 @@ class NFLDataset(Dataset):
                     ]
                 )
         
-        paths2image_file = f"_{self.mode}_{self.size}_paths2image.pth"
-        # paths2image_file = f"_{self.mode}_origin_paths2image.pth"
-        if os.path.isfile(paths2image_file):
-            print(f"Load paths2image from {paths2image_file}")
-            self.paths2image = torch.load(paths2image_file)
-        else:
-            self.paths2image = {}
-            for idx in tqdm(range(len(self.labels))):
-                window = self.num_frames // 2 * self.frame_steps
-                frame = self.frame[idx]
-                for view in ["Endzone", "Sideline"]:
-                    for i, f in enumerate(
-                        range(frame - window - 5, frame + window + 1 + 5)
-                    ): 
-                        video = self.game_play[idx] + f"_{view}.mp4"
-                        path = os.path.join(self.frames_folder, video, f"{video}_{max(0, min(f, self.video2frames[video])):04d}.jpg")
-                        if path not in self.paths2image:
-                            self.paths2image[path] = cv2.resize(read_image(path), (self.size, self.size))
-            print(f"Save paths2image to {paths2image_file}")
-            torch.save(self.paths2image, paths2image_file)
+        # paths2image_file = f"_{self.mode}_{self.size}_paths2image.pth"
+        # # paths2image_file = f"_{self.mode}_origin_paths2image.pth"
+        # if os.path.isfile(paths2image_file):
+        #     print(f"Load paths2image from {paths2image_file}")
+        #     self.paths2image = torch.load(paths2image_file)
+        # else:
+        #     self.paths2image = {}
+        #     for idx in tqdm(range(len(self.labels))):
+        #         window = self.num_frames // 2 * self.frame_steps
+        #         frame = self.frame[idx]
+        #         for view in ["Endzone", "Sideline"]:
+        #             # for i, f in enumerate(
+        #             #     range(frame - window - 5, frame + window + 1 + 5)
+        #             # ): 
+        #             for i, f in enumerate(
+        #                 range(frame - window , frame + window + 1, self.frame_steps)
+        #             ): 
+        #                 video = self.game_play[idx] + f"_{view}.mp4"
+        #                 path = os.path.join(self.frames_folder, video, f"{video}_{max(0, min(f, self.video2frames[video])):04d}.jpg")
+        #                 if path not in self.paths2image:
+        #                     # self.paths2image[path] = cv2.resize(read_image(path), (self.size, self.size))
+        #                     img_org = read_image(path)
+        #                     self.paths2image[path] = cv2.resize(img_org, (self.size, self.size))
+        #                     # cv2.imwrite(path + '_1013x1800', cv2.resize(img_org, (1800, 1013)))
+        #     print(f"Save paths2image to {paths2image_file}")
+        #     torch.save(self.paths2image, paths2image_file)
             
 
     
@@ -382,13 +257,23 @@ class NFLDataset(Dataset):
                 range(frame - window, frame + window + 1, self.frame_steps)
             ):
                 path = os.path.join(self.frames_folder, video, f"{video}_{max(0, min(f, self.video2frames[video])):04d}.jpg")
-                if i%2 == 0 or flag == 0:
-                    img_new = self.paths2image[path]
-                    # img_new = cv2.resize(img, ((self.size, self.size)))
-                else:
-                    img_new = np.zeros((self.size, self.size), dtype=np.float32)
+                img_new = np.zeros((self.size, self.size), dtype=np.float32)
+
+                # if i%4 == 0 or flag == 0: # full image
+                #     img_new = self.paths2image[path]
+                #     # img_new = cv2.resize(img, ((self.size, self.size)))
+                if flag != 0:
+                    # img_new = np.zeros((self.size, self.size), dtype=np.float32)
                     img = read_image(path)
                     x, w, y, h = bboxes[i]
+
+                    # img = read_image(path + '_1013x1800')
+                    # x, w, y, h = bboxes[i]
+                    # x = x*1800//1280
+                    # w = w*1800//1280
+                    # y = y*1800//1280
+                    # h = h*1800//1280
+
                     # using crop
                     img = img[
                         int(y + h / 2)

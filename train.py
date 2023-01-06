@@ -116,7 +116,8 @@ def main():
     # )
 
     # Initialize trainer
-    model = Model(model_args.model_name, in_chans=data_args.num_frames)
+    # model = Model(model_args.model_name, in_chans=data_args.num_frames)
+    model = Model(model_args.model_name)
     if last_checkpoint is None and model_args.resume is not None:
         logger.info(f"Loading {model_args.resume} ...")
         checkpoint = torch.load(model_args.resume, "cpu")

@@ -122,49 +122,49 @@ def main(csv_folder: str):
     df["frame"] = (df["step"] / 10 * 59.94 + 5 * 59.94).astype("int") + 1
 
     # add Helmet track Features
-    CLUSTERS = [10, 50, 100, 500]
+    # CLUSTERS = [10, 50, 100, 500]
 
-    def add_step_pct(df, cluster):
-        df['step_pct'] = cluster * (df['step']-min(df['step']))/(max(df['step'])-min(df['step']))
-        df['step_pct'] = df['step_pct'].apply(np.ceil).astype(np.int32)
-        return df
+    # def add_step_pct(df, cluster):
+    #     df['step_pct'] = cluster * (df['step']-min(df['step']))/(max(df['step'])-min(df['step']))
+    #     df['step_pct'] = df['step_pct'].apply(np.ceil).astype(np.int32)
+    #     return df
 
-    for cluster in CLUSTERS:
-        df = df.groupby('game_play').apply(lambda x:add_step_pct(x, cluster))
+    # for cluster in CLUSTERS:
+    #     df = df.groupby('game_play').apply(lambda x:add_step_pct(x, cluster))
 
-        for helmet_view in ['Sideline', 'Endzone']:
-            tmp_helmets = helmets.copy(deep=True)
-            tmp_helmets.loc[tmp_helmets['view']=='Endzone2','view'] = 'Endzone'
+    #     for helmet_view in ['Sideline', 'Endzone']:
+    #         tmp_helmets = helmets.copy(deep=True)
+    #         tmp_helmets.loc[tmp_helmets['view']=='Endzone2','view'] = 'Endzone'
 
-            tmp_helmets.rename(columns = {'frame': 'step'}, inplace = True)
-            tmp_helmets = tmp_helmets.groupby('game_play').apply(lambda x:add_step_pct(x, cluster))
-            tmp_helmets = tmp_helmets[tmp_helmets['view']==helmet_view]
+    #         tmp_helmets.rename(columns = {'frame': 'step'}, inplace = True)
+    #         tmp_helmets = tmp_helmets.groupby('game_play').apply(lambda x:add_step_pct(x, cluster))
+    #         tmp_helmets = tmp_helmets[tmp_helmets['view']==helmet_view]
 
-            tmp_helmets['helmet_id'] = tmp_helmets['game_play'] + '_' + tmp_helmets['nfl_player_id'].astype(str) + '_' + tmp_helmets['step_pct'].astype(str)
+    #         tmp_helmets['helmet_id'] = tmp_helmets['game_play'] + '_' + tmp_helmets['nfl_player_id'].astype(str) + '_' + tmp_helmets['step_pct'].astype(str)
 
-            tmp_helmets = tmp_helmets[['helmet_id', 'left', 'width', 'top', 'height']].groupby('helmet_id').mean().reset_index()
-            for player_ind in [1, 2]:
-                df['helmet_id'] = df['game_play'] + '_' + df['nfl_player_id_'+str(player_ind)].astype(str) + \
-                                        '_' + df['step_pct'].astype(str)
+    #         tmp_helmets = tmp_helmets[['helmet_id', 'left', 'width', 'top', 'height']].groupby('helmet_id').mean().reset_index()
+    #         for player_ind in [1, 2]:
+    #             df['helmet_id'] = df['game_play'] + '_' + df['nfl_player_id_'+str(player_ind)].astype(str) + \
+    #                                     '_' + df['step_pct'].astype(str)
 
-                df = df.merge(tmp_helmets, how = 'left')
-                df.rename(columns = {i:i+'_'+helmet_view+'_'+str(cluster)+'_'+str(player_ind) for i in ['left', 'width', 'top', 'height']}, inplace = True)
+    #             df = df.merge(tmp_helmets, how = 'left')
+    #             df.rename(columns = {i:i+'_'+helmet_view+'_'+str(cluster)+'_'+str(player_ind) for i in ['left', 'width', 'top', 'height']}, inplace = True)
 
-                del df['helmet_id']
+    #             del df['helmet_id']
 
-                feature_cols += [i+'_'+helmet_view+'_'+str(cluster)+'_'+str(player_ind) for i in ['left', 'width', 'top', 'height']]
-            del tmp_helmets
+    #             feature_cols += [i+'_'+helmet_view+'_'+str(cluster)+'_'+str(player_ind) for i in ['left', 'width', 'top', 'height']]
+    #         del tmp_helmets
 
-    cols = [i[:-2] for i in df.columns if i[-2:]=='_1' and i!='nfl_player_id_1']
-    df[[i+'_diff' for i in cols]] = np.abs(df[[i+'_1' for i in cols]].values - df[[i+'_2' for i in cols]].values)
-    feature_cols += [i+'_diff' for i in cols]
+    # cols = [i[:-2] for i in df.columns if i[-2:]=='_1' and i!='nfl_player_id_1']
+    # df[[i+'_diff' for i in cols]] = np.abs(df[[i+'_1' for i in cols]].values - df[[i+'_2' for i in cols]].values)
+    # feature_cols += [i+'_diff' for i in cols]
 
-    cols = USE_COLS
-    df[[i+'_prod' for i in cols]] = np.abs(df[[i+'_1' for i in cols]].values - df[[i+'_2' for i in cols]].values)
-    feature_cols += [i+'_prod' for i in cols]
-    df[feature_cols].fillna(-1, inplace=True)
-    print("Number of features", len(feature_cols))
-    print("Columns: ", feature_cols)
+    # cols = USE_COLS
+    # df[[i+'_prod' for i in cols]] = np.abs(df[[i+'_1' for i in cols]].values - df[[i+'_2' for i in cols]].values)
+    # feature_cols += [i+'_prod' for i in cols]
+    # df[feature_cols].fillna(-1, inplace=True)
+    # print("Number of features", len(feature_cols))
+    # print("Columns: ", feature_cols)
 
     features_csv_path = os.path.join(csv_folder, "train_features.csv")
     helmets_csv_path = os.path.join(csv_folder, "train_baseline_helmets_kfold.csv")
