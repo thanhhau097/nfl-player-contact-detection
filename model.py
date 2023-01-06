@@ -14,8 +14,14 @@ class Model(nn.Module):
         
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.flatten = nn.Flatten()
+
+        # self.frames_linear = nn.Sequential(nn.Linear(self.backbone.num_features, self.backbone.num_features), nn.ReLU())
+
         self.frames_linear = nn.Sequential(nn.Linear(self.backbone.num_features * 2, self.backbone.num_features), nn.ReLU())
-        self.aggregater = nn.Sequential(nn.Conv3d(self.backbone.num_features, self.backbone.num_features, kernel_size=3, stride=(2, 1, 1)), nn.MaxPool3d(kernel_size=2, stride=(2, 1, 1)))
+        self.aggregater = nn.Sequential(
+                            nn.Conv3d(self.backbone.num_features, self.backbone.num_features, kernel_size=(3,1,1), stride=(2, 1, 1)), 
+                            nn.MaxPool3d(kernel_size=(2,1,1), stride=(2, 1, 1))
+                        )
 
 
         self.backbone.reset_classifier(0, "")

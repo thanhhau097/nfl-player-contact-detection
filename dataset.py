@@ -190,7 +190,6 @@ class NFLDataset(Dataset):
         #                     # cv2.imwrite(path + '_1013x1800', cv2.resize(img_org, (1800, 1013)))
         #     print(f"Save paths2image to {paths2image_file}")
         #     torch.save(self.paths2image, paths2image_file)
-            
 
     
     def __len__(self):
