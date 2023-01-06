@@ -233,14 +233,16 @@ class NFLDataset(Dataset):
     def preprocess_video(self):
         cmds = []
         for video in tqdm(self.helmets.video.unique()):
-            if not os.path.exists(os.path.join(self.frames_folder, video)):
+            video_folder = os.path.join(self.frames_folder, video)
+            if not os.path.exists(video_folder):
                 os.makedirs(os.path.join(self.frames_folder, video), exist_ok=True)
-            # "-q:v 2 -vf format=gray"
-            cmds.append(
-                f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -f image2 "
-                f"{os.path.join(self.frames_folder, video, video)}_%04d.jpg -hide_banner "
-                "-loglevel error"
-            )
+            if len(os.listdir(video_folder)) == 0:
+                # "-q:v 2 -vf format=gray"
+                cmds.append(
+                    f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -f image2 "
+                    f"{os.path.join(self.frames_folder, video, video)}_%04d.jpg -hide_banner "
+                    "-loglevel error"
+                )
 
         with Pool(32) as p:
             print(p.map(run_video_cmd, cmds))
@@ -251,10 +253,7 @@ class NFLDataset(Dataset):
         # self.game_play = self.labels.game_play.values
         # self.features = self.labels[USE_COLS + ["game_play", "frame"]].fillna(-1)
         self.game_play_frame = self.labels[["game_play", "frame"]].drop_duplicates().values
-
-        if len(os.listdir(self.frames_folder)) == 0:
-            print("Extracting frames from scratch ...")
-            self.preprocess_video()
+        self.preprocess_video()
 
         self.video2helmets = {}
         helmets_new = self.helmets.set_index("video")
@@ -438,7 +437,7 @@ def pad_seq(seq, max_batch_len, pad_value=-100):
 
 
 def collate_pad_fn(batch):
-    max_length = max([len(item["features"]) for item in batch])
+    max_length = 173
     features, labels = [], []
 
     for item in batch:
