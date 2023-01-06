@@ -6,16 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import GroupKFold
 
-USE_COLS = [
-    "x_position",
-    "y_position",
-    "speed",
-    "distance",
-    "direction",
-    "orientation",
-    "acceleration",
-    "sa",
-]
+DIST_THRESH = 2
 
 
 def expand_contact_id(df: pd.DataFrame):
@@ -88,45 +79,15 @@ def create_features(
     return df_combo, output_cols
 
 
-def main(csv_folder: str):
-    print("Reading CSV")
-    labels_df = pd.read_csv(os.path.join(csv_folder, "train_labels.csv"))
-    tracking = pd.read_csv(os.path.join(csv_folder, "train_player_tracking.csv"))
-    helmets = pd.read_csv(os.path.join(csv_folder, "train_baseline_helmets.csv"))
-    # # split fold
-    # labels_df["game_key"] = pd.to_numeric(labels_df["game_play"].str.split("_").str[0])
-    # random.seed(42)
-    # game_keys = list(set(labels_df.game_key.values))
-    # random.shuffle(game_keys)
-    # fold_dict = {}
-    # N = 10
-    # F = 15
-    # for i in range(F):
-    #     keys = game_keys[i * N : (i + 1) * N]
-    #     for k in keys:
-    #         fold_dict[k] = i
+def add_step_pct(df, cluster):
+    df["step_pct"] = cluster * (df["step"] - min(df["step"])) / (max(df["step"]) - min(df["step"]))
+    df["step_pct"] = df["step_pct"].apply(np.ceil).astype(np.int32)
+    return df
 
-    # labels_df["fold"] = labels_df["game_key"].map(fold_dict)
-    # helmets["fold"] = helmets["game_key"].map(fold_dict)
 
-    print("Creating features...")
-    labels_df = expand_contact_id(labels_df)
-    df, feature_cols = create_features(labels_df, tracking, use_cols=USE_COLS)
-    df = df.query("not distance>2").reset_index(drop=True)
-
-    df["frame"] = (df["step"] / 10 * 59.94 + 5 * 59.94).astype("int") + 1
-
+def create_helmet_track_features(df, helmets, feature_cols, clusters=[10, 50, 100, 500]):
     # add Helmet track Features
-    CLUSTERS = [10, 50, 100, 500]
-
-    def add_step_pct(df, cluster):
-        df["step_pct"] = (
-            cluster * (df["step"] - min(df["step"])) / (max(df["step"]) - min(df["step"]))
-        )
-        df["step_pct"] = df["step_pct"].apply(np.ceil).astype(np.int32)
-        return df
-
-    for cluster in CLUSTERS:
+    for cluster in clusters:
         df = df.groupby("game_play").apply(lambda x: add_step_pct(x, cluster))
 
         for helmet_view in ["Sideline", "Endzone"]:
@@ -179,13 +140,63 @@ def main(csv_folder: str):
                 ]
             del tmp_helmets
 
+    return df, feature_cols
+
+
+def main(csv_folder: str):
+    print("Reading CSV")
+    labels_df = pd.read_csv(os.path.join(csv_folder, "train_labels.csv"))
+    tracking = pd.read_csv(os.path.join(csv_folder, "train_player_tracking.csv"))
+    helmets = pd.read_csv(os.path.join(csv_folder, "train_baseline_helmets.csv"))
+
+    # split fold
+    kf = GroupKFold(n_splits=5)
+    labels_df["fold"] = -1
+    helmets["fold"] = -1
+    for i, (_, val_idxs) in enumerate(
+        kf.split(labels_df, labels_df["contact"], labels_df["game_play"])
+    ):
+        labels_df.loc[val_idxs, ["fold"]] = i
+        game_plays = labels_df[labels_df["fold"] == i]["game_play"].unique()
+        helmets.loc[helmets["game_play"].isin(game_plays), ["fold"]] = i
+
+    print("Creating features...")
+    labels_df = expand_contact_id(labels_df)
+    df, feature_cols = create_features(
+        labels_df,
+        tracking,
+        use_cols=[
+            "x_position",
+            "y_position",
+            "speed",
+            "distance",
+            "direction",
+            "orientation",
+            "acceleration",
+            "sa",
+        ],
+    )
+    df = df.query(f"not distance > {DIST_THRESH}").reset_index(drop=True)
+
+    df["frame"] = (df["step"] / 10 * 59.94 + 5 * 59.94).astype("int") + 1
+    df, feature_cols = create_helmet_track_features(df, helmets, feature_cols)
+
     cols = [i[:-2] for i in df.columns if i[-2:] == "_1" and i != "nfl_player_id_1"]
     df[[i + "_diff" for i in cols]] = np.abs(
         df[[i + "_1" for i in cols]].values - df[[i + "_2" for i in cols]].values
     )
     feature_cols += [i + "_diff" for i in cols]
 
-    cols = USE_COLS
+    cols = [
+        "x_position",
+        "y_position",
+        "speed",
+        "distance",
+        "direction",
+        "orientation",
+        "acceleration",
+        "sa",
+    ]
     df[[i + "_prod" for i in cols]] = np.abs(
         df[[i + "_1" for i in cols]].values - df[[i + "_2" for i in cols]].values
     )
@@ -196,14 +207,6 @@ def main(csv_folder: str):
 
     features_csv_path = os.path.join(csv_folder, "train_features.csv")
     helmets_csv_path = os.path.join(csv_folder, "train_baseline_helmets_kfold.csv")
-
-    kf = GroupKFold(n_splits=5)
-    labels_df["fold"] = -1
-    helmets["fold"] = -1
-    for i, (_, val_idxs) in enumerate(kf.split(df, df["contact"], df["game_play"])):
-        df.loc[val_idxs, ["fold"]] = i
-        game_plays = df[df["fold"] == i]["game_play"].unique()
-        helmets.loc[helmets["game_play"].isin(game_plays), ["fold"]] = i
 
     df.to_csv(features_csv_path, index=False)
     helmets.to_csv(helmets_csv_path, index=False)
