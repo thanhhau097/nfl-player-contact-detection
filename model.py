@@ -11,18 +11,18 @@ class Model(nn.Module):
         assert in_chans // 3, "in_chans must be divisible by 3"
         self.backbone = timm.create_model(model_name, pretrained=True, drop_path_rate=0.2)
         self.backbone.reset_classifier(0, "")
-        self.temporal_conv = nn.Sequential(
-            nn.Conv3d(
-                self.backbone.num_features,
-                self.backbone.num_features,
-                kernel_size=(3, 1, 1),
-                stride=(2, 1, 1),
-                bias=False,
-            ),
-            nn.BatchNorm3d(self.backbone.num_features),
-            nn.ReLU(),
-            nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1)),
-        )
+        # self.temporal_conv = nn.Sequential(
+        #     nn.Conv3d(
+        #         self.backbone.num_features,
+        #         self.backbone.num_features,
+        #         kernel_size=(3, 1, 1),
+        #         stride=(2, 1, 1),
+        #         bias=False,
+        #     ),
+        #     nn.BatchNorm3d(self.backbone.num_features),
+        #     nn.ReLU(),
+        #     nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1)),
+        # )
         self.box_roi_pool = RoIAlign(
             output_size=(7, 7), spatial_scale=0.03125, sampling_ratio=0, aligned=True
         )
@@ -46,14 +46,16 @@ class Model(nn.Module):
         # Endzone
         feats0 = self.backbone(images0)
         _, d, h, w = feats0.shape
-        feats0 = feats0.reshape(B, -1, d, h, w).permute(0, 2, 1, 3, 4)
-        feats0 = self.temporal_conv(feats0)
+        feats0 = feats0.reshape(B, -1, d, h, w).mean(1)
+        # feats0 = feats0.reshape(B, -1, d, h, w).permute(0, 2, 1, 3, 4)
+        # feats0 = self.temporal_conv(feats0)
         feats0 = self.box_roi_pool(feats0, inputs["boxes0"])
         feats0 = self.box_head(feats0.flatten(1, -1))
         # Sideline
         feats1 = self.backbone(images1)
-        feats1 = feats1.reshape(B, -1, d, h, w).permute(0, 2, 1, 3, 4)
-        feats1 = self.temporal_conv(feats1)
+        feats1 = feats1.reshape(B, -1, d, h, w).mean(1)
+        # feats1 = feats1.reshape(B, -1, d, h, w).permute(0, 2, 1, 3, 4)
+        # feats1 = self.temporal_conv(feats1)
         feats1 = self.box_roi_pool(feats1, inputs["boxes1"])
         feats1 = self.box_head(feats1.flatten(1, -1))
 
