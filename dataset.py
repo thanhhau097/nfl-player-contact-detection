@@ -165,8 +165,8 @@ def gaussian2D(shape, sigma=1):
 
 
 def read_image(path: str):
-    return turbo_jpeg.decode(open(path, "rb").read(), pixel_format=TJPF_GRAY)[:, :, 0]
-
+    # return turbo_jpeg.decode(open(path, "rb").read(), pixel_format=TJPF_GRAY)[:, :, 0]
+    return turbo_jpeg.decode(open(path, "rb").read())[..., ::-1]
 
 def build_data_aug(mode: str):
     if mode == "train":
@@ -314,8 +314,8 @@ class NFLDataset(Dataset):
                 f = min(f, self.video2frames[video])
                 img_path = os.path.join(self.frames_folder, video, f"{video}_{f:04d}.jpg")
                 img.append(read_image(img_path))
-            imgs.append(np.stack(img, -1))
-        img_h, img_w = imgs[0].shape[:-1]
+            # imgs.append(np.stack(img, -1))
+            imgs.append(np.concatenate(img, -1))
 
         pairs_bboxes = []
 

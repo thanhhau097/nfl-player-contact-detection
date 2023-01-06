@@ -43,14 +43,36 @@ class Model(nn.Module):
         )
 
     def forward(self, inputs):
+        # still 1 channel: TODO: update to use 3 channels
+        # Endzone
+        # b, c, h, w = inputs["images0"].shape
+        # raw_feats0 = self.backbone(inputs["images0"].reshape(b * c, 1, w, h))
+
+        # box_b, box_c, box_len = inputs["boxes0"].shape
+        # feats0 = self.box_roi_pool(raw_feats0, inputs["boxes0"].reshape(box_b * box_c, box_len))
+        # feats0 = self.box_head(feats0.flatten(1, -1))
+        # # Sideline
+        # raw_feats1 = self.backbone(inputs["images1"].reshape(b * c, 1, w, h))
+        # feats1 = self.box_roi_pool(raw_feats1, inputs["boxes1"].reshape(box_b * box_c, box_len))
+        # feats1 = self.box_head(feats1.flatten(1, -1))
+
+        # frame_features0 = self.frames_linear(self.flatten(self.global_pool(raw_feats0)))
+        # frame_features0 = torch.index_select(frame_features0, 0, inputs["boxes0"].reshape(box_b * box_c, box_len)[:, 4].int())
+        
+        # frame_features1 = self.frames_linear(self.flatten(self.global_pool(raw_feats1)))
+        # frame_features1 = torch.index_select(frame_features1, 0, inputs["boxes1"].reshape(box_b * box_c, box_len)[:, 4].int())
+    
+        # visual_feats = torch.cat([feats0, frame_features0, feats1, frame_features1], 1)
+        # visual_feats = visual_feats.reshape(box_b, box_c, 2048).mean(1)
+
         all_visual_features = []
         for i in range(self.in_chans):
             # Endzone
-            raw_feats0 = self.backbone(inputs["images0"][:, i: i+1])
+            raw_feats0 = self.backbone(inputs["images0"][:, i * 3: i * 3 + 1])
             feats0 = self.box_roi_pool(raw_feats0, inputs["boxes0"][:, i])
             feats0 = self.box_head(feats0.flatten(1, -1))
             # Sideline
-            raw_feats1 = self.backbone(inputs["images1"][:, i: i+1])
+            raw_feats1 = self.backbone(inputs["images1"][:, i * 3: i * 3 + 1])
             feats1 = self.box_roi_pool(raw_feats1, inputs["boxes1"][:, i])
             feats1 = self.box_head(feats1.flatten(1, -1))
 
@@ -65,6 +87,7 @@ class Model(nn.Module):
             all_visual_features.append(visual_feats)
 
         visual_feats = torch.stack(all_visual_features, -1).mean(2)
+
         track_feats = self.mlp(inputs["features"])
         logits = self.fc(torch.cat([visual_feats, track_feats], 1))
         return logits
