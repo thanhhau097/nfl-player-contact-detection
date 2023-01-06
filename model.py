@@ -8,10 +8,21 @@ from torchvision.ops import RoIAlign
 class Model(nn.Module):
     def __init__(self, model_name="resnet50", in_chans=15):
         super(Model, self).__init__()
-        self.backbone = timm.create_model(
-            model_name, pretrained=True, in_chans=in_chans, drop_path_rate=0.2
-        )
+        assert in_chans // 3, "in_chans must be divisible by 3"
+        self.backbone = timm.create_model(model_name, pretrained=True, drop_path_rate=0.2)
         self.backbone.reset_classifier(0, "")
+        # self.temporal_conv = nn.Sequential(
+        #     nn.Conv3d(
+        #         self.backbone.num_features,
+        #         self.backbone.num_features,
+        #         kernel_size=(3, 1, 1),
+        #         stride=(2, 1, 1),
+        #         bias=False,
+        #     ),
+        #     nn.BatchNorm3d(self.backbone.num_features),
+        #     nn.ReLU(),
+        #     nn.MaxPool3d(kernel_size=(2, 1, 1), stride=(2, 1, 1)),
+        # )
         self.box_roi_pool = RoIAlign(
             output_size=(7, 7), spatial_scale=0.03125, sampling_ratio=0, aligned=True
         )
@@ -27,12 +38,24 @@ class Model(nn.Module):
         self.fc = nn.Linear(64 + 512 * 2, 1)
 
     def forward(self, inputs):
+        images0 = inputs["images0"]
+        images1 = inputs["images1"]
+        B, C, H, W = images0.shape
+        images0 = images0.reshape(B, C // 3, 3, H, W).flatten(0, 1)
+        images1 = images1.reshape(B, C // 3, 3, H, W).flatten(0, 1)
         # Endzone
-        feats0 = self.backbone(inputs["images0"])
+        feats0 = self.backbone(images0)
+        _, d, h, w = feats0.shape
+        feats0 = feats0.reshape(B, -1, d, h, w).mean(1)
+        # feats0 = feats0.reshape(B, -1, d, h, w).permute(0, 2, 1, 3, 4)
+        # feats0 = self.temporal_conv(feats0)
         feats0 = self.box_roi_pool(feats0, inputs["boxes0"])
         feats0 = self.box_head(feats0.flatten(1, -1))
         # Sideline
-        feats1 = self.backbone(inputs["images1"])
+        feats1 = self.backbone(images1)
+        feats1 = feats1.reshape(B, -1, d, h, w).mean(1)
+        # feats1 = feats1.reshape(B, -1, d, h, w).permute(0, 2, 1, 3, 4)
+        # feats1 = self.temporal_conv(feats1)
         feats1 = self.box_roi_pool(feats1, inputs["boxes1"])
         feats1 = self.box_head(feats1.flatten(1, -1))
 
