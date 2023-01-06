@@ -4,7 +4,6 @@ from typing import List
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import GroupKFold
 
 DIST_THRESH = 2
 
@@ -150,15 +149,20 @@ def main(csv_folder: str):
     helmets = pd.read_csv(os.path.join(csv_folder, "train_baseline_helmets.csv"))
 
     # split fold
-    kf = GroupKFold(n_splits=5)
-    labels_df["fold"] = -1
-    helmets["fold"] = -1
-    for i, (_, val_idxs) in enumerate(
-        kf.split(labels_df, labels_df["contact"], labels_df["game_play"])
-    ):
-        labels_df.loc[val_idxs, ["fold"]] = i
-        game_plays = labels_df[labels_df["fold"] == i]["game_play"].unique()
-        helmets.loc[helmets["game_play"].isin(game_plays), ["fold"]] = i
+    labels_df["game_key"] = pd.to_numeric(labels_df["game_play"].str.split("_").str[0])
+    random.seed(42)
+    game_keys = list(set(labels_df.game_key.values))
+    random.shuffle(game_keys)
+
+    fold_dict = {}
+    N = 10
+    for i in range(15):
+        keys = game_keys[i * N : (i + 1) * N]
+        for k in keys:
+            fold_dict[k] = i
+
+    labels_df["fold"] = labels_df["game_key"].map(fold_dict)
+    helmets["fold"] = helmets["game_key"].map(fold_dict)
 
     print("Creating features...")
     labels_df = expand_contact_id(labels_df)
