@@ -50,9 +50,7 @@ def main():
         datefmt="%m/%d/%Y %H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
-    logger.setLevel(
-        logging.INFO if is_main_process(training_args.local_rank) else logging.WARN
-    )
+    logger.setLevel(logging.INFO if is_main_process(training_args.local_rank) else logging.WARN)
     # Set the verbosity to info of the Transformers logger (on main process only):
     if is_main_process(training_args.local_rank):
         # transformers.utils.logging.set_verbosity_info()
@@ -71,7 +69,7 @@ def main():
         labels_df[labels_df["fold"] != fold],
         helmets[helmets["fold"] != fold],
         video_folder=os.path.join(data_folder, "train"),
-        frames_folder=os.path.join(data_folder, "train_frames", str(fold)),
+        frames_folder=os.path.join(data_folder, "frames"),
         mode="train",
         size=data_args.size,
         num_frames=data_args.num_frames,
@@ -86,7 +84,7 @@ def main():
         labels_df[labels_df["fold"] == fold],
         helmets[helmets["fold"] == fold],
         video_folder=os.path.join(data_folder, "train"),
-        frames_folder=os.path.join(data_folder, "val_frames", str(fold)),
+        frames_folder=os.path.join(data_folder, "frames"),
         mode="val",
         size=data_args.size,
         num_frames=data_args.num_frames,

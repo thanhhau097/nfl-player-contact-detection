@@ -29,14 +29,16 @@ for i in range(15):
     for k in keys:
         fold_dict[k] = i
 
-df["fold"] = df['game_key'].map(fold_dict)
+df["fold"] = df["game_key"].map(fold_dict)
 df.to_csv(os.path.join(kfold_folder, "train_labels.csv"))
 
 # video metadata
 print("Loading video metadata")
 video_meta_data_df = pd.read_csv(os.path.join(DATA_FOLDER, "train_video_metadata.csv"))
 video_meta_data_df["fold"] = video_meta_data_df["game_key"].map(fold_dict)
-video_meta_data_df.to_csv(os.path.join(kfold_folder, "train_video_metadata.csv"))
+video_meta_data_df.to_csv(
+    os.path.join(kfold_folder, "train_video_metadata.csv"), index=False
+)
 
 # helmets
 print("Loading helmets")
@@ -44,10 +46,14 @@ baseline_helmets_df = pd.read_csv(
     os.path.join(DATA_FOLDER, "train_baseline_helmets.csv")
 )
 baseline_helmets_df["fold"] = baseline_helmets_df["game_key"].map(fold_dict)
-baseline_helmets_df.to_csv(os.path.join(kfold_folder, "train_baseline_helmets.csv"))
+baseline_helmets_df.to_csv(
+    os.path.join(kfold_folder, "train_baseline_helmets.csv"), index=False
+)
 
 # player tracking
 print("Loading player tracking")
 player_tracking_df = pd.read_csv(os.path.join(DATA_FOLDER, "train_player_tracking.csv"))
 player_tracking_df["fold"] = player_tracking_df["game_key"].map(fold_dict)
-player_tracking_df.to_csv(os.path.join(kfold_folder, "train_player_tracking.csv"))
+player_tracking_df.to_csv(
+    os.path.join(kfold_folder, "train_player_tracking.csv"), index=False
+)
