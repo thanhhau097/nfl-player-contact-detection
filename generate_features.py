@@ -105,8 +105,8 @@ def main(csv_folder: str):
     random.shuffle(game_keys)
 
     fold_dict = {}
-    N = 10
-    for i in range(15):
+    N = 30
+    for i in range(5):
         keys = game_keys[i * N : (i + 1) * N]
         for k in keys:
             fold_dict[k] = i
@@ -118,7 +118,6 @@ def main(csv_folder: str):
     labels_df = expand_contact_id(labels_df)
     df, feature_cols = create_features(labels_df, tracking, use_cols=USE_COLS)
     df = df.query("not distance>2").reset_index(drop=True)
-
     df["frame"] = (df["step"] / 10 * 59.94 + 5 * 59.94).astype("int") + 1
 
     # add Helmet track Features

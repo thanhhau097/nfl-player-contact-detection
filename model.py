@@ -15,13 +15,15 @@ class Model(nn.Module):
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.flatten = nn.Flatten()
 
-        # self.frames_linear = nn.Sequential(nn.Linear(self.backbone.num_features, self.backbone.num_features), nn.ReLU())
-
-        self.frames_linear = nn.Sequential(nn.Linear(self.backbone.num_features * 2, self.backbone.num_features), nn.ReLU())
-        self.aggregater = nn.Sequential(
-                            nn.Conv3d(self.backbone.num_features, self.backbone.num_features, kernel_size=(3,1,1), stride=(2, 1, 1)), 
-                            nn.MaxPool3d(kernel_size=(2,1,1), stride=(2, 1, 1))
-                        )
+        self.model_name = model_name
+        if self.model_name == 'resnet50':
+            self.frames_linear = nn.Sequential(nn.Linear(self.backbone.num_features, self.backbone.num_features), nn.ReLU())
+        else:
+            self.frames_linear = nn.Sequential(nn.Linear(self.backbone.num_features * 2, self.backbone.num_features), nn.ReLU())
+            self.aggregater = nn.Sequential(
+                                nn.Conv3d(self.backbone.num_features, self.backbone.num_features, kernel_size=(3,1,1), stride=(2, 1, 1)), 
+                                nn.MaxPool3d(kernel_size=(2,1,1), stride=(2, 1, 1))
+                            )
 
 
         self.backbone.reset_classifier(0, "")
@@ -48,12 +50,16 @@ class Model(nn.Module):
         images = images.reshape(b, c // 3, 3, h, w).flatten(0, 1)
         images = self.backbone(images)
         _, _c, _h, _w = images.shape
-        # images = images.reshape(b, c // 3, _c, _h, _w)
-        # images = images.mean(dim=1)
-        images = images.reshape(b, _c, c // 3, _h, _w)
-        images = self.aggregater(images)
+        if self.model_name == 'resnet50':
+            images = images.reshape(b, c // 3, _c, _h, _w)
+            images = images.mean(dim=1)
+        else:
+            images = images.reshape(b, _c, c // 3, _h, _w)
+            images = self.aggregater(images)
         images = self.frames_linear(self.flatten(self.global_pool(images)))
 
         features = self.mlp(features)
         y = self.fc(torch.cat([images, features], dim=1))
-        return y
+        _b, _f = images.shape
+        images = images.reshape(_b, _f//4, 4).mean(dim=-1)
+        return y, torch.cat([images, features], dim=1)

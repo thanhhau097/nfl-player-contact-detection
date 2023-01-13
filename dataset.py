@@ -94,16 +94,12 @@ class NFLDataset(Dataset):
     def preprocess_video(self):
         cmds = []
         for video in tqdm(self.helmets.video.unique()):
-            if not os.path.exists(os.path.join(self.frames_folder, video)):
+            video_folder = os.path.join(self.frames_folder, video)
+            if not os.path.exists(video_folder):
                 os.makedirs(os.path.join(self.frames_folder, video), exist_ok=True)
             # "-q:v 2 -vf format=gray"
-            if self.use_heatmap:
-                cmds.append(
-                    f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -s {self.img_width}x{self.img_height} -f image2 "
-                    f"{os.path.join(self.frames_folder, video, video)}_%04d.jpg -hide_banner "
-                    "-loglevel error"
-                )
-            else:
+            if len(os.listdir(video_folder)) == 0:
+                # "-q:v 2 -vf format=gray"
                 cmds.append(
                     f"ffmpeg -i {os.path.join(self.video_folder, video)} -q:v 2 -f image2 "
                     f"{os.path.join(self.frames_folder, video, video)}_%04d.jpg -hide_banner "
@@ -124,9 +120,7 @@ class NFLDataset(Dataset):
         self.players = self.labels[["nfl_player_id_1", "nfl_player_id_2"]].values
         self.game_play = self.labels.game_play.values
 
-        if len(os.listdir(self.frames_folder)) == 0:
-            print("Extracting frames from scratch ...")
-            self.preprocess_video()
+        self.preprocess_video()
 
         self.video2helmets = {}
         helmets_new = self.helmets.set_index("video")
@@ -163,7 +157,6 @@ class NFLDataset(Dataset):
                         for idx in range(start_idx - 5, end_idx + 1)
                     ]
                 )
-        
         # paths2image_file = f"_{self.mode}_{self.size}_paths2image.pth"
         # # paths2image_file = f"_{self.mode}_origin_paths2image.pth"
         # if os.path.isfile(paths2image_file):
@@ -190,6 +183,21 @@ class NFLDataset(Dataset):
         #                     # cv2.imwrite(path + '_1013x1800', cv2.resize(img_org, (1800, 1013)))
         #     print(f"Save paths2image to {paths2image_file}")
         #     torch.save(self.paths2image, paths2image_file)
+
+        # self.paths2image = {}
+        # for idx in tqdm(range(len(self.labels))):
+        #     window = self.num_frames // 2 * self.frame_steps
+        #     frame = self.frame[idx]
+        #     for view in ["Sideline"]:
+        #         for i, f in enumerate(
+        #             range(frame - window - 5, frame + window + 1 + 5)
+        #         ): 
+        #             video = self.game_play[idx] + f"_{view}.mp4"
+        #             path = os.path.join(self.frames_folder, video, f"{video}_{max(0, min(f, self.video2frames[video])):04d}.jpg")
+        #             if path not in self.paths2image:
+        #                 self.paths2image[path] = 1
+        #                 img_org = read_image(path)
+        #                 cv2.imwrite(path + '_x2', cv2.resize(img_org, (1280*2, 720*2)))
 
     
     def __len__(self):
@@ -263,15 +271,27 @@ class NFLDataset(Dataset):
                 #     # img_new = cv2.resize(img, ((self.size, self.size)))
                 if flag != 0:
                     # img_new = np.zeros((self.size, self.size), dtype=np.float32)
+
                     img = read_image(path)
                     x, w, y, h = bboxes[i]
 
+                    # if view == "Endzone":
+                    #     img = read_image(path)
+                    #     x, w, y, h = bboxes[i]
+                    # else:
+                    #     img = read_image(path + '_1013x1800')
+                    #     x, w, y, h = bboxes[i]
+                    #     x = x*1800/1280
+                    #     w = w*1800/1280
+                    #     y = y*1800/1280
+                    #     h = h*1800/1280
+
                     # img = read_image(path + '_1013x1800')
                     # x, w, y, h = bboxes[i]
-                    # x = x*1800//1280
-                    # w = w*1800//1280
-                    # y = y*1800//1280
-                    # h = h*1800//1280
+                    # x = x*1800/1280
+                    # w = w*1800/1280
+                    # y = y*1800/1280
+                    # h = h*1800/1280
 
                     # using crop
                     img = img[
@@ -299,18 +319,20 @@ class NFLDataset(Dataset):
         # img = self.valid_aug(image=img)["image"]
 
         label = self.labels.contact.values[idx]
+        contact_id = self.labels.contact_id.values[idx]
         # print("augmentation time", time.time() - start)
         # print("--------------------------------------------------------------------------------")
-        return {"images": img, "features": feature, "labels": label}
+        return {"images": img, "features": feature, "labels": label, "contact_ids": contact_id}
 
 
 def collate_fn(batch):
-    images, labels, features = [], [], []
+    images, labels, features, contact_ids = [], [], [], []
 
     for f in batch:
         images.append(f["images"])
         features.append(f["features"])
         labels.append(f["labels"])
+        contact_ids.append(f["contact_id"])
 
     images = torch.stack(images)
     features = torch.stack(features)
@@ -320,6 +342,7 @@ def collate_fn(batch):
         "images": images,
         "features": features,
         "labels": labels,
+        "contact_ids": contact_ids,
     }
     return batch
 

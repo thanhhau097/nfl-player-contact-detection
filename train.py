@@ -71,7 +71,7 @@ def main():
         labels_df[labels_df["fold"] != fold],
         helmets[helmets["fold"] != fold],
         video_folder=os.path.join(data_folder, "train"),
-        frames_folder=os.path.join(data_folder, f"train_frames{'_heatmap' if data_args.use_heatmap else ''}", str(fold)),
+        frames_folder=os.path.join(data_folder, "frames"),
         mode="train",
         size=data_args.size,
         num_frames=data_args.num_frames,
@@ -86,7 +86,7 @@ def main():
         labels_df[labels_df["fold"] == fold],
         helmets[helmets["fold"] == fold],
         video_folder=os.path.join(data_folder, "train"),
-        frames_folder=os.path.join(data_folder, f"val_frames{'_heatmap' if data_args.use_heatmap else ''}", str(fold)),
+        frames_folder=os.path.join(data_folder, "frames"),
         mode="val",
         size=data_args.size,
         num_frames=data_args.num_frames,
@@ -169,6 +169,11 @@ def main():
         thresholds = np.arange(0.1, 0.9, 0.01)
         scores = []
         predictions = torch.sigmoid(torch.from_numpy(output.predictions)).numpy()
+        # contact_id = labels_df[labels_df["fold"] != fold].contact_id
+        # print(predictions.shape)
+        # print(len(contact_id))
+        # df_new = pd.DataFrame({'contact_id': contact_id, 'model_prob': predictions[:, 0]})
+        # df_new.to_csv("result_model.csv", index=False)
         labels = output.label_ids
         for threshold in thresholds:
             preds = predictions
