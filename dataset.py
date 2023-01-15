@@ -188,7 +188,7 @@ class NFLDataset(Dataset):
         # for idx in tqdm(range(len(self.labels))):
         #     window = self.num_frames // 2 * self.frame_steps
         #     frame = self.frame[idx]
-        #     for view in ["Sideline"]:
+        #     for view in ["Endzone"]:
         #         for i, f in enumerate(
         #             range(frame - window - 5, frame + window + 1 + 5)
         #         ): 
@@ -197,7 +197,7 @@ class NFLDataset(Dataset):
         #             if path not in self.paths2image:
         #                 self.paths2image[path] = 1
         #                 img_org = read_image(path)
-        #                 cv2.imwrite(path + '_x2', cv2.resize(img_org, (1280*2, 720*2)))
+        #                 cv2.imwrite(path + '_1013x1800', cv2.resize(img_org, (1800, 1013)))
 
     
     def __len__(self):
@@ -319,10 +319,11 @@ class NFLDataset(Dataset):
         # img = self.valid_aug(image=img)["image"]
 
         label = self.labels.contact.values[idx]
-        contact_id = self.labels.contact_id.values[idx]
+        # contact_id = self.labels.contact_id.values[idx]
         # print("augmentation time", time.time() - start)
         # print("--------------------------------------------------------------------------------")
-        return {"images": img, "features": feature, "labels": label, "contact_ids": contact_id}
+        # return {"images": img, "features": feature, "labels": label, "contact_ids": contact_id}
+        return {"images": img, "features": feature, "labels": label}
 
 
 def collate_fn(batch):
@@ -332,7 +333,7 @@ def collate_fn(batch):
         images.append(f["images"])
         features.append(f["features"])
         labels.append(f["labels"])
-        contact_ids.append(f["contact_id"])
+        # contact_ids.append(f["contact_id"])
 
     images = torch.stack(images)
     features = torch.stack(features)
@@ -342,7 +343,7 @@ def collate_fn(batch):
         "images": images,
         "features": features,
         "labels": labels,
-        "contact_ids": contact_ids,
+        # "contact_ids": contact_ids,
     }
     return batch
 

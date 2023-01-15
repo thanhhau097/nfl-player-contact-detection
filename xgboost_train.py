@@ -22,8 +22,8 @@ class Config:
     xgb_params = {
         "n_estimators": 5000,
         "learning_rate": 1e-2,
-        "subsample": 0.6,
-        "colsample_bytree": 0.8,
+        "subsample": 0.35,
+        "colsample_bytree": 0.6,
         "objective": "binary:logistic",
         "nthread": os.cpu_count(),
         'eval_metric': 'auc',
@@ -133,14 +133,14 @@ def fit_xgboost(cfg, X, feat_cols, params, add_suffix=''):
         )
 
         model_path = os.path.join(cfg.EXP_MODEL, f'xgb_fold{fold}model')
+        print(model_path)
         model.save_model(model_path)
 
         if not torch.cuda.is_available():
             model = xgb.Booster().load_model(model_path)
         else:
             model = ForestInference.load(model_path, output_class=True, model_type='xgboost')
-    
-        pred_i = model.predict_proba(X[X.fold == fold][feat_cols])[:, 1]
+        pred_i = model.predict_proba(X[X.fold == fold][feat_cols].to_numpy())[:, 1]
         oof_pred[X[X.fold == fold].index] = pred_i
         score = round(roc_auc_score(X[X.fold == fold]['contact'], pred_i), 5)
         print(f'Performance of the prediction: {score}\n')
@@ -253,21 +253,44 @@ for nnmodel in ["resnet50", "tf_efficientnetv2_b0", "tf_efficientnetv2_b2"]:
     df[f'{nnmodel}_prob'] = probs
     feature_cols.append(f'{nnmodel}_prob')
 
-    # columns = [f'{nnmodel}_feat{i}' for i in range(len(feats[0]))]
-    # split = pd.DataFrame(feats, columns = columns)
-    # df = pd.concat([df, split], axis=1)
-    # feature_cols.extend(columns)
+    columns = [f'{nnmodel}_feat{i}' for i in range(len(feats[0]))]
+    split = pd.DataFrame(feats, columns = columns)
+    df = pd.concat([df, split], axis=1)
+    feature_cols.extend(columns)
             
-
-oof_pred = fit_xgboost(cfg, df, feature_cols, cfg.xgb_params, add_suffix="")
-
+print("Number of features final", len(feature_cols))
 
 def func(x_list):
     score = matthews_corrcoef(df['contact'], oof_pred>x_list[0])
     return -score
 
-x0 = [0.5]
-result = minimize(func, x0,  method="nelder-mead")
-print("score:", round(matthews_corrcoef(df['contact'], oof_pred>result.x[0]), 5))
-print("threshold", round(result.x[0], 5))
-gc.collect()
+best_optimized_mcc = 0
+best_subsample = -1
+best_colsample_bytree = -1
+
+for subsample in np.arange(0.7, 0.9, 0.05):
+    for colsample_bytree in np.arange(0.3, 0.9, 0.05):
+        cfg.xgb_params["subsample"] = subsample
+        cfg.xgb_params["colsample_bytree"] = colsample_bytree
+        oof_pred = fit_xgboost(cfg, df, feature_cols, cfg.xgb_params, add_suffix="")
+        
+        x0 = [0.5]
+        result = minimize(func, x0,  method="nelder-mead")
+        score = round(matthews_corrcoef(df['contact'], oof_pred>result.x[0]), 5)
+        print(f"Best score: {score} @ {subsample} | {colsample_bytree}",)
+        print("threshold", round(result.x[0], 5))
+
+        if score > best_optimized_mcc:
+            best_optimized_mcc = score
+            best_subsample = subsample
+            best_colsample_bytree = colsample_bytree
+        gc.collect()
+print("----------------------")
+print(best_subsample, best_colsample_bytree, best_optimized_mcc)
+
+# oof_pred = fit_xgboost(cfg, df, feature_cols, cfg.xgb_params, add_suffix="")
+        
+# x0 = [0.5]
+# result = minimize(func, x0,  method="nelder-mead")
+# score = round(matthews_corrcoef(df['contact'], oof_pred>result.x[0]), 5)
+# print(f"Best MCC: {score} @ threshold", round(result.x[0], 5))

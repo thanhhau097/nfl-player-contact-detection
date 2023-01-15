@@ -60,6 +60,7 @@ class Model(nn.Module):
 
         features = self.mlp(features)
         y = self.fc(torch.cat([images, features], dim=1))
-        _b, _f = images.shape
-        images = images.reshape(_b, _f//4, 4).mean(dim=-1)
-        return y, torch.cat([images, features], dim=1)
+        # _b, _f = images.shape
+        # images = images.reshape(_b, _f//4, 4).mean(dim=-1)
+        # return y, torch.cat([images, features], dim=1)
+        return y
