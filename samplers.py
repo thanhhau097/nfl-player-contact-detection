@@ -116,7 +116,7 @@ class ProportionalTwoClassesBatchSampler(Sampler):
         
 
     def __len__(self):
-        return len(self.labels)
+        return len(self.labels) // self.world_size
 
     def __iter__(self):
         if self.minority_size_in_batch > self.batch_size:

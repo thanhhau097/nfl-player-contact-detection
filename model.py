@@ -16,10 +16,13 @@ class Model(nn.Module):
         self.flatten = nn.Flatten()
 
         self.model_name = model_name
-        if self.model_name == 'resnet50':
+        if self.model_name.startswith('resnet50'):
             self.frames_linear = nn.Sequential(nn.Linear(self.backbone.num_features, self.backbone.num_features), nn.ReLU())
         else:
-            self.frames_linear = nn.Sequential(nn.Linear(self.backbone.num_features * 2, self.backbone.num_features), nn.ReLU())
+            if self.model_name.startswith('convnext'):
+                self.frames_linear = nn.Sequential(nn.Linear(self.backbone.num_features, self.backbone.num_features), nn.ReLU())
+            else:
+                self.frames_linear = nn.Sequential(nn.Linear(self.backbone.num_features * 2, self.backbone.num_features), nn.ReLU())
             self.aggregater = nn.Sequential(
                                 nn.Conv3d(self.backbone.num_features, self.backbone.num_features, kernel_size=(3,1,1), stride=(2, 1, 1)), 
                                 nn.MaxPool3d(kernel_size=(2,1,1), stride=(2, 1, 1))
