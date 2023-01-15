@@ -112,11 +112,11 @@ class ProportionalTwoClassesBatchSampler(Sampler):
         self.minority_size_in_batch = minority_size_in_batch
         self.batch_size = batch_size
         self.priority = majority_priority
-        self._num_batches = (labels == 0).sum() // (batch_size - minority_size_in_batch) // self.world_size + 1
+        self._num_batches = (labels == 0).sum() // (batch_size - minority_size_in_batch) // self.world_size
         
 
     def __len__(self):
-        return len(self.labels) // self.world_size
+        return len(self.labels)
 
     def __iter__(self):
         if self.minority_size_in_batch > self.batch_size:
@@ -149,7 +149,7 @@ class ProportionalTwoClassesBatchSampler(Sampler):
             i_minor = 0
             j_major = 0
             for i in range(len(majority) + len(minority)):
-                if i % 2 == 0:
+                if i % (self.batch_size // self.minority_size_in_batch) == 0:
                     batch_inds.append(minority[i_minor])
                     i_minor += 1
                 else:
