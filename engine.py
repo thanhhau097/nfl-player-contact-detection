@@ -22,7 +22,8 @@ class CustomTrainer(Trainer):
             self.train_dataset.labels["contact"].values,
             self.args.per_device_train_batch_size,
             minority_size_in_batch=self.args.per_device_train_batch_size // 2,
-            world_size=self.args.world_size
+            world_size=self.args.world_size,
+            local_rank=self.args.local_rank
         )
 
     def compute_loss(self, model: Model, inputs: Dict, return_outputs=False):

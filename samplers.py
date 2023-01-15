@@ -103,11 +103,13 @@ class ProportionalTwoClassesBatchSampler(Sampler):
         batch_size: int,
         minority_size_in_batch: int,
         world_size: int,
+        local_rank: int,
         majority_priority=True,
         
     ):
         super().__init__(labels)
         self.world_size = world_size
+        self.local_rank = local_rank
         self.labels = labels
         self.minority_size_in_batch = minority_size_in_batch
         self.batch_size = batch_size
@@ -125,6 +127,9 @@ class ProportionalTwoClassesBatchSampler(Sampler):
             )
         y_indices = [np.where(self.labels == label)[0] for label in np.unique(self.labels)]
         y_indices = sorted(y_indices, key=lambda x: x.shape)
+        
+        minor_per_device = len(y_indices[0])//self.world_size
+        y_indices[0] = y_indices[0][self.local_rank*minor_per_device : (self.local_rank + 1)*minor_per_device]
 
         minority_copy = y_indices[0].copy()
 
