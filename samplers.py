@@ -114,7 +114,8 @@ class ProportionalTwoClassesBatchSampler(Sampler):
         self.minority_size_in_batch = minority_size_in_batch
         self.batch_size = batch_size
         self.priority = majority_priority
-        self._num_batches = (labels == 0).sum() // (batch_size - minority_size_in_batch) // self.world_size
+        # self._num_batches = (labels == 0).sum() // (batch_size - minority_size_in_batch) // self.world_size
+        self._num_batches = len(self.labels) // self.batch_size // self.world_size
         
 
     def __len__(self):
@@ -127,9 +128,12 @@ class ProportionalTwoClassesBatchSampler(Sampler):
             )
         y_indices = [np.where(self.labels == label)[0] for label in np.unique(self.labels)]
         y_indices = sorted(y_indices, key=lambda x: x.shape)
-        
+        np.random.shuffle(y_indices[0])
+        np.random.shuffle(y_indices[1])
         minor_per_device = len(y_indices[0])//self.world_size
+        major_per_device = len(y_indices[1])//self.world_size
         y_indices[0] = y_indices[0][self.local_rank*minor_per_device : (self.local_rank + 1)*minor_per_device]
+        y_indices[1] = y_indices[1][self.local_rank*major_per_device : (self.local_rank + 1)*major_per_device]
 
         minority_copy = y_indices[0].copy()
 
@@ -139,6 +143,7 @@ class ProportionalTwoClassesBatchSampler(Sampler):
             if len(y_indices[0]) < self.minority_size_in_batch:
                 if self.priority:
                     # reloading minority samples
+                    # print("Resetting Pos Samples!")
                     y_indices[0] = minority_copy.copy()
             minority = np.random.choice(
                 y_indices[0], size=self.minority_size_in_batch, replace=False
@@ -148,25 +153,12 @@ class ProportionalTwoClassesBatchSampler(Sampler):
                 size=(self.batch_size - self.minority_size_in_batch),
                 replace=False,
             )
-            # batch_inds = np.concatenate((minority, majority), axis=0)
-            # batch_inds = np.random.permutation(batch_inds)
-            batch_inds = []
-            i_minor = 0
-            j_major = 0
-            for i in range(len(majority) + len(minority)):
-                if i % (self.batch_size // self.minority_size_in_batch) == 0:
-                    batch_inds.append(minority[i_minor])
-                    i_minor += 1
-                else:
-                    batch_inds.append(majority[j_major])
-                    j_major += 1
-            for i in range(len(batch_inds) // self.world_size):
-                batch_indices_new = batch_inds[i*self.world_size:(i+1)*self.world_size]
-                random.shuffle(batch_indices_new)
-                batch_inds[i*self.world_size:(i+1)*self.world_size] = batch_indices_new
+            batch_inds = np.concatenate((minority, majority), axis=0)
+            batch_inds = np.random.permutation(batch_inds)
 
             y_indices[0] = np.setdiff1d(y_indices[0], minority)
             y_indices[1] = np.setdiff1d(y_indices[1], majority)
+
             indices.extend(batch_inds)
         return iter(indices[: len(self.labels) // self.world_size])
 
