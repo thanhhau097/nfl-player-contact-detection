@@ -17,18 +17,22 @@ from model import Model
 from samplers import ProportionalTwoClassesBatchSampler
 
 class CustomTrainer(Trainer):
-    def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
-        return ProportionalTwoClassesBatchSampler(
-            self.train_dataset.labels["contact"].values,
-            self.args.per_device_train_batch_size,
-            minority_size_in_batch=self.args.per_device_train_batch_size // 2,
-            world_size=self.args.world_size,
-            local_rank=self.args.local_rank
-        )
+    # def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
+    #     return ProportionalTwoClassesBatchSampler(
+    #         self.train_dataset.labels["contact"].values,
+    #         self.args.per_device_train_batch_size,
+    #         minority_size_in_batch=self.args.per_device_train_batch_size // 8,
+    #         world_size=self.args.world_size,
+    #         local_rank=self.args.local_rank
+    #     )
 
     def compute_loss(self, model: Model, inputs: Dict, return_outputs=False):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        outputs = model(inputs["images"].to(device), inputs["features"].to(device))
+        outputs = model(
+                    inputs["images"].to(device), 
+                    inputs["features"].to(device),
+                    inputs["contact_ids"],
+                )
         loss_fct = F.binary_cross_entropy_with_logits
         labels = inputs.get("labels")
         loss = loss_fct(outputs.view(-1), labels.float())
@@ -100,7 +104,7 @@ class CustomTrainer(Trainer):
         metric_key_prefix: str = "eval",
     ) -> Dict[str, float]:
 
-        torch.save(self.model.state_dict(), "debug_ckpt.pth")
+        # torch.save(self.model.state_dict(), "debug_ckpt.pth")
         # memory metrics - must set up as early as possible
         self._memory_tracker.start()
 

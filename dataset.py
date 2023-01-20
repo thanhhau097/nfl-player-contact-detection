@@ -263,6 +263,8 @@ class NFLDataset(Dataset):
             for i, f in enumerate(
                 range(frame - window, frame + window + 1, self.frame_steps)
             ):
+                # if (i+1)%4 == 0 or (i+1)%5 == 0:
+                #     continue
                 path = os.path.join(self.frames_folder, video, f"{video}_{max(0, min(f, self.video2frames[video])):04d}.jpg")
                 img_new = np.zeros((self.size, self.size), dtype=np.float32)
 
@@ -319,11 +321,10 @@ class NFLDataset(Dataset):
         # img = self.valid_aug(image=img)["image"]
 
         label = self.labels.contact.values[idx]
-        # contact_id = self.labels.contact_id.values[idx]
+        contact_id = self.labels.contact_id.values[idx]
         # print("augmentation time", time.time() - start)
         # print("--------------------------------------------------------------------------------")
-        # return {"images": img, "features": feature, "labels": label, "contact_ids": contact_id}
-        return {"images": img, "features": feature, "labels": label}
+        return {"images": img, "features": feature, "labels": label, "contact_ids": contact_id}
 
 
 def collate_fn(batch):
@@ -333,7 +334,7 @@ def collate_fn(batch):
         images.append(f["images"])
         features.append(f["features"])
         labels.append(f["labels"])
-        # contact_ids.append(f["contact_id"])
+        contact_ids.append(f["contact_ids"])
 
     images = torch.stack(images)
     features = torch.stack(features)
@@ -343,7 +344,7 @@ def collate_fn(batch):
         "images": images,
         "features": features,
         "labels": labels,
-        # "contact_ids": contact_ids,
+        "contact_ids": contact_ids,
     }
     return batch
 

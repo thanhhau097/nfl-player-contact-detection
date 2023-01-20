@@ -125,16 +125,16 @@ def fit_xgboost(cfg, X, feat_cols, params, add_suffix=''):
         #     verbose_eval=100,
         # )
         
-        model = xgb.XGBClassifier(**params)
-        model.fit(
-            X[X.fold != fold][feat_cols].to_numpy(), X[X.fold != fold]['contact'].to_numpy(), 
-            eval_set=[(X[X.fold == fold][feat_cols].to_numpy(), X[X.fold == fold]['contact'].to_numpy())], 
-            **fit_params
-        )
+        # model = xgb.XGBClassifier(**params)
+        # model.fit(
+        #     X[X.fold != fold][feat_cols].to_numpy(), X[X.fold != fold]['contact'].to_numpy(), 
+        #     eval_set=[(X[X.fold == fold][feat_cols].to_numpy(), X[X.fold == fold]['contact'].to_numpy())], 
+        #     **fit_params
+        # )
 
         model_path = os.path.join(cfg.EXP_MODEL, f'xgb_fold{fold}model')
         print(model_path)
-        model.save_model(model_path)
+        # model.save_model(model_path)
 
         if not torch.cuda.is_available():
             model = xgb.Booster().load_model(model_path)
@@ -242,21 +242,21 @@ for nnmodel in ["resnet50", "tf_efficientnetv2_b0", "tf_efficientnetv2_b2"]:
         data = torch.load(f"{nnmodel}_feat_prob_fold{kfold}.pth")
         for k, v in data.items():
             data_full[k] = v[0]
-            feat_full[k] = v[1]
+            # feat_full[k] = v[1]
     probs = []
-    feats = []
+    # feats = []
     contact_ids = df.contact_id.to_list()
     for index in range(len(df)):
         contact_id = contact_ids[index]
         probs.append(data_full[contact_id])
-        feats.append(feat_full[contact_id])
+        # feats.append(feat_full[contact_id])
     df[f'{nnmodel}_prob'] = probs
     feature_cols.append(f'{nnmodel}_prob')
 
-    columns = [f'{nnmodel}_feat{i}' for i in range(len(feats[0]))]
-    split = pd.DataFrame(feats, columns = columns)
-    df = pd.concat([df, split], axis=1)
-    feature_cols.extend(columns)
+    # columns = [f'{nnmodel}_feat{i}' for i in range(len(feats[0]))]
+    # split = pd.DataFrame(feats, columns = columns)
+    # df = pd.concat([df, split], axis=1)
+    # feature_cols.extend(columns)
             
 print("Number of features final", len(feature_cols))
 
@@ -264,33 +264,100 @@ def func(x_list):
     score = matthews_corrcoef(df['contact'], oof_pred>x_list[0])
     return -score
 
-best_optimized_mcc = 0
-best_subsample = -1
-best_colsample_bytree = -1
-
-for subsample in np.arange(0.7, 0.9, 0.05):
-    for colsample_bytree in np.arange(0.3, 0.9, 0.05):
-        cfg.xgb_params["subsample"] = subsample
-        cfg.xgb_params["colsample_bytree"] = colsample_bytree
-        oof_pred = fit_xgboost(cfg, df, feature_cols, cfg.xgb_params, add_suffix="")
+# Tune xgboost tree
+# best_optimized_mcc = 0
+# best_subsample = -1
+# best_colsample_bytree = -1
+# for subsample in np.arange(0.7, 0.9, 0.05):
+#     for colsample_bytree in np.arange(0.3, 0.9, 0.05):
+#         cfg.xgb_params["subsample"] = subsample
+#         cfg.xgb_params["colsample_bytree"] = colsample_bytree
+#         oof_pred = fit_xgboost(cfg, df, feature_cols, cfg.xgb_params, add_suffix="")
         
-        x0 = [0.5]
-        result = minimize(func, x0,  method="nelder-mead")
-        score = round(matthews_corrcoef(df['contact'], oof_pred>result.x[0]), 5)
-        print(f"Best score: {score} @ {subsample} | {colsample_bytree}",)
-        print("threshold", round(result.x[0], 5))
+#         x0 = [0.5]
+#         result = minimize(func, x0,  method="nelder-mead")
+#         score = round(matthews_corrcoef(df['contact'], oof_pred>result.x[0]), 5)
+#         print(f"Best score: {score} @ {subsample} | {colsample_bytree}",)
+#         print("threshold", round(result.x[0], 5))
 
-        if score > best_optimized_mcc:
-            best_optimized_mcc = score
-            best_subsample = subsample
-            best_colsample_bytree = colsample_bytree
-        gc.collect()
-print("----------------------")
-print(best_subsample, best_colsample_bytree, best_optimized_mcc)
+#         if score > best_optimized_mcc:
+#             best_optimized_mcc = score
+#             best_subsample = subsample
+#             best_colsample_bytree = colsample_bytree
+#         gc.collect()
+# print("----------------------")
+# print(best_subsample, best_colsample_bytree, best_optimized_mcc)
 
-# oof_pred = fit_xgboost(cfg, df, feature_cols, cfg.xgb_params, add_suffix="")
-        
-# x0 = [0.5]
-# result = minimize(func, x0,  method="nelder-mead")
-# score = round(matthews_corrcoef(df['contact'], oof_pred>result.x[0]), 5)
-# print(f"Best MCC: {score} @ threshold", round(result.x[0], 5))
+oof_pred = fit_xgboost(cfg, df, feature_cols, cfg.xgb_params, add_suffix="")
+# df.to_csv("xgboost_reult.csv", index=False)
+
+
+best_distance = 0
+best_oof = 0
+
+# Tune distance
+# for distance in np.arange(1.6, 1.86, 0.01):
+#     oof_pred_tune = oof_pred.copy()
+#     for i in df.query(f"distance>{distance}").index:
+#         oof_pred_tune[i] = 0
+#     x0 = [0.5]
+#     result = minimize(func, x0,  method="nelder-mead")
+#     score = round(matthews_corrcoef(df['contact'], oof_pred_tune>result.x[0]), 5)
+#     print(f"Distance {distance} - Best MCC: {score} @ threshold", round(result.x[0], 5))
+#     if score > best_oof:
+#         best_distance = distance
+#         best_oof = score
+# print(best_distance, best_oof)
+
+for i in df.query("distance>1.85").index:
+    oof_pred[i] = 0
+x0 = [0.5]
+result = minimize(func, x0,  method="nelder-mead")
+score = round(matthews_corrcoef(df['contact'], oof_pred>result.x[0]), 5)
+best_thresh = round(result.x[0], 5)
+print(f"Best MCC: {score} @ threshold", best_thresh)
+
+
+df['pairs'] = df.apply(lambda x: '_'.join([
+                                            x.game_play, 
+                                            str(x.nfl_player_id_1), 
+                                            str(x.nfl_player_id_2), 
+                                            str(x.step).zfill(4)
+                                        ]), axis=1)
+df['pairs_nostep'] = df.pairs.apply(lambda x: '_'.join(x.split('_')[:-1]))
+df['preds_score'] = oof_pred
+df = df.sort_values('pairs').reset_index(drop=True)
+
+# Tunning window smooth
+best_window = 0
+best_accum = 0
+best_score = 0
+pairs_nostep = df.pairs_nostep.tolist()
+for window in range(5, 20):
+    for accum in range(1, window - 3):
+        preds = df['preds_score'].tolist() > best_thresh
+        for i in range(len(df) - window):
+            if pairs_nostep[i] == pairs_nostep[i+window-1]:
+                if preds[i] and preds[i+window]:
+                    num_true = 0
+                    for k in range(i+1, i+window-1-1):
+                        if preds[k]:
+                            num_true += 1
+                    if num_true >= accum:
+                        for k in range(i+1, i+window-1-1):
+                            preds[k] = True
+
+        score = round(matthews_corrcoef(df['contact'], preds), 5)
+        print(f"Window {window} Accum {accum} - score: {score}")
+        if score > best_score:
+            best_score = score
+            best_window = window
+            best_accum = accum
+
+print(best_window, best_accum, best_score)      
+
+
+
+
+
+

@@ -44,7 +44,8 @@ class Model(nn.Module):
         # self.fc = nn.Linear(64 + self.backbone.num_features * 2, 1)
         self.fc = nn.Linear(64 + self.backbone.num_features, 1)
 
-    def forward(self, images, features, labels=None):
+    def forward(self, images, features, contact_ids, labels=None):
+        import pdb;pdb.set_trace()
         b, c, h, w = images.shape
         
         # images = images.reshape(b * 2, c // 2, h, w)
