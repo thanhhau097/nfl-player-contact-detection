@@ -65,8 +65,8 @@ def main():
     fold = data_args.fold
 
     labels_df = pd.read_csv(os.path.join(data_folder, "train_features.csv"))
-    helmets = pd.read_csv(os.path.join(data_folder, "train_baseline_helmets_kfold.csv"))
-
+    # helmets = pd.read_csv(os.path.join(data_folder, "train_baseline_helmets_kfold.csv"))
+    helmets = pd.read_csv(os.path.join(data_folder, "train_baseline_helmets_kfold_yolox_boxes_fix.csv"))
     train_dataset = NFLDataset(
         labels_df[labels_df["fold"] != fold],
         helmets[helmets["fold"] != fold],

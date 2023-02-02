@@ -157,7 +157,7 @@ class NFLDataset(Dataset):
                         for idx in range(start_idx - 5, end_idx + 1)
                     ]
                 )
-        # paths2image_file = f"_{self.mode}_{self.size}_paths2image.pth"
+        # paths2image_file = f"_{self.mode}_paths2image.pth"
         # # paths2image_file = f"_{self.mode}_origin_paths2image.pth"
         # if os.path.isfile(paths2image_file):
         #     print(f"Load paths2image from {paths2image_file}")
@@ -168,27 +168,24 @@ class NFLDataset(Dataset):
         #         window = self.num_frames // 2 * self.frame_steps
         #         frame = self.frame[idx]
         #         for view in ["Endzone", "Sideline"]:
-        #             # for i, f in enumerate(
-        #             #     range(frame - window - 5, frame + window + 1 + 5)
-        #             # ): 
         #             for i, f in enumerate(
-        #                 range(frame - window , frame + window + 1, self.frame_steps)
+        #                 range(frame - window - 5, frame + window + 1 + 5)
         #             ): 
         #                 video = self.game_play[idx] + f"_{view}.mp4"
         #                 path = os.path.join(self.frames_folder, video, f"{video}_{max(0, min(f, self.video2frames[video])):04d}.jpg")
         #                 if path not in self.paths2image:
-        #                     # self.paths2image[path] = cv2.resize(read_image(path), (self.size, self.size))
         #                     img_org = read_image(path)
-        #                     self.paths2image[path] = cv2.resize(img_org, (self.size, self.size))
+        #                     self.paths2image[path] = img_org
         #                     # cv2.imwrite(path + '_1013x1800', cv2.resize(img_org, (1800, 1013)))
         #     print(f"Save paths2image to {paths2image_file}")
-        #     torch.save(self.paths2image, paths2image_file)
+            # torch.save(self.paths2image, paths2image_file)
+            # print(f"Saved!")
 
         # self.paths2image = {}
         # for idx in tqdm(range(len(self.labels))):
         #     window = self.num_frames // 2 * self.frame_steps
         #     frame = self.frame[idx]
-        #     for view in ["Endzone"]:
+        #     for view in ["Sideline"]:
         #         for i, f in enumerate(
         #             range(frame - window - 5, frame + window + 1 + 5)
         #         ): 
@@ -197,7 +194,7 @@ class NFLDataset(Dataset):
         #             if path not in self.paths2image:
         #                 self.paths2image[path] = 1
         #                 img_org = read_image(path)
-        #                 cv2.imwrite(path + '_1013x1800', cv2.resize(img_org, (1800, 1013)))
+        #                 cv2.imwrite(path + '_1080x1920', cv2.resize(img_org, (1920, 1080)))
 
     
     def __len__(self):
@@ -216,7 +213,6 @@ class NFLDataset(Dataset):
                 players.append(p)
             else:
                 players.append(int(p))
-
         imgs = []
         # import time
         for view in ["Endzone", "Sideline"]:
@@ -227,73 +223,156 @@ class NFLDataset(Dataset):
             # print("self.helmets.loc time", time.time() - start)
             # start = time.time()
             tmp = tmp[tmp['frame'].between(frame-window, frame+window)] # tmp.query("@frame-@window<=frame<=@frame+@window")
-            # print("tmp.query time", time.time() - start)
-            # start = time.time()
-
             tmp = tmp[
                 tmp.nfl_player_id.isin(players)
             ]  # .sort_values(['nfl_player_id', 'frame'])
+            tmp_0 = tmp.copy()
+            tmp_1 = tmp.copy()
             tmp_frames = tmp.frame.values
             tmp = tmp.groupby("frame")[["left", "width", "top", "height"]].mean()
-            # print("tmp.groupby time", time.time() - start)
-            # start = time.time()
+
+            # Helmet heatmap
+            if "G" in players:
+                if players[0] == "G":
+                    tmp_0 = tmp_0[tmp_0.nfl_player_id.isin([players[1]])] \
+                            .groupby("frame")[
+                                ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
+                                # ["left", "width", "top", "height"]
+                                # ["x1_n", "y1_n", "x2_n", "y2_n"]
+                            ] \
+                            .mean()
+                else:
+                    tmp_0 = tmp_0[tmp_0.nfl_player_id.isin([players[0]])] \
+                            .groupby("frame")[
+                                ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
+                                # ["left", "width", "top", "height"]
+                                # ["x1_n", "y1_n", "x2_n", "y2_n"]
+                            ] \
+                            .mean()
+            else:
+                tmp_0 = tmp_0[tmp_0.nfl_player_id.isin([players[0]])] \
+                        .groupby("frame")[
+                            ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
+                            # ["left", "width", "top", "height"]
+                            # ["x1_n", "y1_n", "x2_n", "y2_n"]
+                        ] \
+                        .mean()
+                tmp_1 = tmp_1[tmp_1.nfl_player_id.isin([players[1]])] \
+                        .groupby("frame")[
+                            ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
+                            # ["left", "width", "top", "height"]
+                            # ["x1_n", "y1_n", "x2_n", "y2_n"]
+                        ] \
+                        .mean()
 
             bboxes = []
             tmp_players_frame_dict = {}
             for i, r in tmp.iterrows():
                 tmp_players_frame_dict[i] = r.values
+
+            bboxes_0 = []
+            tmp_players_frame_dict_0 = {}
+            for i, r in tmp_0.iterrows():
+                tmp_players_frame_dict_0[i] = r.values  
+            # tmp_players_frame_dict_0_align = {}
+            # for i, r in tmp.iterrows():
+            #     if i in tmp_players_frame_dict_0:
+            #         tmp_players_frame_dict_0_align[i] = tmp_players_frame_dict_0[i]
+            if "G" not in players:
+                bboxes_1 = []
+                tmp_players_frame_dict_1 = {}
+                for i, r in tmp_1.iterrows():
+                    tmp_players_frame_dict_1[i] = r.values
+                # tmp_players_frame_dict_1_align = {}
+                # for i, r in tmp.iterrows():
+                #     if i in tmp_players_frame_dict_1:
+                #         tmp_players_frame_dict_1_align[i] = tmp_players_frame_dict_1[i]
+
             for f in range(frame - window, frame + window + 1, 1):
                 if f in tmp_frames:
-                    # x, w, y, h = tmp.loc[f][["left", "width", "top", "height"]]
                     x, w, y, h = tmp_players_frame_dict[f]
                     bboxes.append([x, w, y, h])
                 else:
                     bboxes.append([np.nan, np.nan, np.nan, np.nan])
+                if f in tmp_players_frame_dict_0:
+                    x0, w0, y0, h0, yl0_x1, yl0_y1, yl0_x2, yl0_y2 = tmp_players_frame_dict_0[f]
+                    bboxes_0.append([x0, w0, y0, h0, yl0_x1, yl0_y1, yl0_x2, yl0_y2])
+                    # x0, w0, y0, h0 = tmp_players_frame_dict_0[f]
+                    # bboxes_0.append([x0, w0, y0, h0])
+                else:
+                    bboxes_0.append([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
+                if "G" not in players:
+                    if f in tmp_players_frame_dict_1:
+                        x1, w1, y1, h1, yl1_x1, yl1_y1, yl1_x2, yl1_y2 = tmp_players_frame_dict_1[f]
+                        bboxes_1.append([x1, w1, y1, h1, yl1_x1, yl1_y1, yl1_x2, yl1_y2])
+                        # x1, w1, y1, h1 = tmp_players_frame_dict_1[f]
+                        # bboxes_1.append([x1, w1, y1, h1])
+                    else:
+                        bboxes_1.append([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
+
             bboxes = pd.DataFrame(bboxes).interpolate(limit_direction="both").values
             bboxes = bboxes[:: self.frame_steps]
+            bboxes_0 = pd.DataFrame(bboxes_0).interpolate(limit_direction="both").values
+            bboxes_0 = bboxes_0[:: self.frame_steps]
+
+            if "G" not in players:
+                bboxes_1 = pd.DataFrame(bboxes_1).interpolate(limit_direction="both").values
+                bboxes_1 = bboxes_1[:: self.frame_steps]
 
             if bboxes.sum() > 0:
                 flag = 1
             else:
                 flag = 0
-            
-            # print("box processing time", time.time() - start)
-            # start = time.time()
 
             for i, f in enumerate(
                 range(frame - window, frame + window + 1, self.frame_steps)
             ):
-                # if (i+1)%4 == 0 or (i+1)%5 == 0:
-                #     continue
+                if (i+1)%4 == 0:
+                    continue
+
                 path = os.path.join(self.frames_folder, video, f"{video}_{max(0, min(f, self.video2frames[video])):04d}.jpg")
                 img_new = np.zeros((self.size, self.size), dtype=np.float32)
-
-                # if i%4 == 0 or flag == 0: # full image
-                #     img_new = self.paths2image[path]
-                #     # img_new = cv2.resize(img, ((self.size, self.size)))
+                mask_new = np.zeros((self.size, self.size), dtype=np.float32)
+                # maskyl_new = np.zeros((self.size, self.size), dtype=np.float32)
                 if flag != 0:
                     # img_new = np.zeros((self.size, self.size), dtype=np.float32)
 
+                    # img = self.paths2image[path]
                     img = read_image(path)
+                    # img = read_image(path + '_1080x1920')
                     x, w, y, h = bboxes[i]
+                    # x = x*1.5
+                    # w = w*1.5
+                    # y = y*1.5
+                    # h = h*1.5
 
-                    # if view == "Endzone":
-                    #     img = read_image(path)
-                    #     x, w, y, h = bboxes[i]
-                    # else:
-                    #     img = read_image(path + '_1013x1800')
-                    #     x, w, y, h = bboxes[i]
-                    #     x = x*1800/1280
-                    #     w = w*1800/1280
-                    #     y = y*1800/1280
-                    #     h = h*1800/1280
+                    mask = np.zeros_like(img)
+                    # maskyl = np.zeros_like(img)
+                    x0, w0, y0, h0, yl0_x1, yl0_y1, yl0_x2, yl0_y2 = bboxes_0[i]
+                    # x0, w0, y0, h0 = bboxes_0[i]
+                    # x0 = x0*1.5
+                    # w0 = w0*1.5
+                    # y0 = y0*1.5
+                    # h0 = h0*1.5
+                    try:
+                        mask[int(y0):int(y0+h0), int(x0):int(x0+w0)] = 1
+                        # maskyl[max(0, int(yl0_y1)):max(0, int(yl0_y2)), max(0, int(yl0_x1)):max(0, int(yl0_x2))] = 1
+                    except:
+                        a = 1
 
-                    # img = read_image(path + '_1013x1800')
-                    # x, w, y, h = bboxes[i]
-                    # x = x*1800/1280
-                    # w = w*1800/1280
-                    # y = y*1800/1280
-                    # h = h*1800/1280
+                    if "G" not in players:
+                        x1, w1, y1, h1, yl1_x1, yl1_y1, yl1_x2, yl1_y2 = bboxes_1[i]
+                        # x1, w1, y1, h1 = bboxes_1[i]
+                        # x1 = x1*1.5
+                        # w1 = w1*1.5
+                        # y1 = y1*1.5
+                        # h1 = h1*1.5
+                        try:
+                            mask[int(y1):int(y1+h1), int(x1):int(x1+w1)] = 1
+                            # maskyl[max(0, int(yl1_y1)):max(0, int(yl1_y2)), max(0, int(yl1_x1)):max(0, int(yl1_x2))] = 1
+                        except:
+                            a = 1
+                                        
 
                     # using crop
                     img = img[
@@ -304,8 +383,28 @@ class NFLDataset(Dataset):
                         - self.size // 2 : int(x + w / 2)
                         + self.size // 2,
                     ]
+                    mask = mask[
+                        int(y + h / 2)
+                        - self.size // 2 : int(y + h / 2)
+                        + self.size // 2,
+                        int(x + w / 2)
+                        - self.size // 2 : int(x + w / 2)
+                        + self.size // 2,
+                    ]
+                    # maskyl = maskyl[
+                    #     int(y + h / 2)
+                    #     - self.size // 2 : int(y + h / 2)
+                    #     + self.size // 2,
+                    #     int(x + w / 2)
+                    #     - self.size // 2 : int(x + w / 2)
+                    #     + self.size // 2,
+                    # ]
                     img_new[: img.shape[0], : img.shape[1]] = img
+                    mask_new[: mask.shape[0], : mask.shape[1]] = mask
+                    # maskyl_new[: maskyl.shape[0], : maskyl.shape[1]] = maskyl
                 imgs.append(img_new)
+                imgs.append(img_new * mask_new)
+                # imgs.append(img_new * maskyl_new)
             
             # print("image reading time", time.time() - start)
             # print("------------------------")
