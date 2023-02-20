@@ -77,10 +77,8 @@ intersection_paths = list(set(data["path"]).intersection(set(paths.keys())))
 
 from PIL import Image
 import numpy as np
-import cv2
 
 import torch
-from ultralytics import YOLO
 
 # Model
 model = torch.hub.load('ultralytics/yolov5', 'yolov5l')  # or yolov5n - yolov5x6, custom

@@ -47,7 +47,7 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.backbone = timm.create_model(
             # model_name, pretrained=True, in_chans=in_chans, drop_path_rate=0.2
-            model_name, pretrained=True, drop_path_rate=0.2
+            model_name, pretrained=True, drop_path_rate=0.5
         )
         self.backbone.reset_classifier(0, "")
         num_features = self.backbone.num_features
@@ -59,30 +59,28 @@ class Model(nn.Module):
         #     self.backbone = Efficientnet(model_name)
         # num_features = self.backbone.backbone.num_features
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.attention_pool = AttentionPool2d(
-            spacial_dim = 256//32, 
-            embed_dim = num_features,
-            num_heads = 2
-        )
+        # self.attention_pool = AttentionPool2d(
+        #     spacial_dim = 256//32, 
+        #     embed_dim = num_features,
+        #     num_heads = 2
+        # )
         self.flatten = nn.Flatten()
 
         self.model_name = model_name
-        if self.model_name.startswith('resnet'):
-            self.frames_linear = nn.Sequential(
-                nn.Linear(self.backbone.num_features * 2, self.backbone.num_features), 
-                nn.LayerNorm(self.backbone.num_features), 
-                nn.ReLU(), 
-                nn.Dropout(0.2)
-            )
-            # self.frames_linear = nn.Sequential(nn.Linear(num_features, num_features), nn.LayerNorm(self.backbone.num_features), nn.ReLU(), nn.Dropout(0.2))
-        else:
-            if self.model_name.startswith('convnext'):
-                self.frames_linear = nn.Sequential(nn.Linear(num_features * 2, num_features), nn.ReLU())
-            else:
-                self.frames_linear = nn.Sequential(nn.Linear(num_features * 4, num_features), nn.ReLU())
+        self.frames_linear = nn.Sequential(
+            nn.Linear(num_features, num_features), 
+            # nn.LayerNorm(self.backbone.num_features), 
+            nn.ReLU(), 
+            nn.Dropout(0.2)
+        )
+        if not self.model_name.startswith('resnet') and not self.model_name.startswith('seresnext'):
+            # self.aggregater = nn.Sequential(
+            #                     nn.Conv3d(num_features, num_features, kernel_size=(3,1,1), stride=(2, 1, 1)), 
+            #                     nn.MaxPool3d(kernel_size=(3,1,1), stride=(3, 1, 1))
+            #                 )
             self.aggregater = nn.Sequential(
                                 nn.Conv3d(num_features, num_features, kernel_size=(3,1,1), stride=(2, 1, 1)), 
-                                nn.MaxPool3d(kernel_size=(2,1,1), stride=(2, 1, 1))
+                                nn.MaxPool3d(kernel_size=(9,1,1), stride=(9, 1, 1))
                             )
         self.mlp = nn.Sequential(
             # nn.Linear(130, 64),
@@ -98,7 +96,7 @@ class Model(nn.Module):
         # self.fc = nn.Linear(64 + self.backbone.num_features * 2, 1)
         self.fc = nn.Linear(64 + num_features, 1)
 
-    def forward(self, images, features, contact_ids, labels=None):
+    def forward(self, images, features, labels=None):
         b, c, h, w = images.shape
         
         # images = images.reshape(b * 2, c // 2, h, w)
@@ -106,18 +104,21 @@ class Model(nn.Module):
 
         images = images.reshape(b, c // 3, 3, h, w).flatten(0, 1)
         images = self.backbone(images)
+        if self.model_name.startswith('swin'):
+            _b, _hw, _c = images.shape 
+            images = images.reshape(_b, _c, int(_hw**0.5), int(_hw**0.5))
         _, _c, _h, _w = images.shape
-        if self.model_name == 'resnet50':
+        if self.model_name == 'resnet50' or self.model_name == 'seresnext50_32x4d':
             images = images.reshape(b, c // 3, _c, _h, _w)
             images = images.mean(dim=1)
         else:
             images = images.reshape(b, _c, c // 3, _h, _w)
-            images = self.aggregater(images)
+            images = self.aggregater(images).squeeze()
 
-        # images = self.frames_linear(self.flatten(self.global_pool(images)))
-        feat_1 = self.flatten(self.attention_pool(images))
-        feat_2 = self.flatten(self.global_pool(images))
-        images = self.frames_linear(torch.cat([feat_1, feat_2], -1))
+        images = self.frames_linear(self.flatten(self.global_pool(images)))
+        # feat_1 = self.flatten(self.attention_pool(images))
+        # feat_2 = self.flatten(self.global_pool(images))
+        # images = self.frames_linear(torch.cat([feat_1, feat_2], -1))
         features = self.mlp(features)
         y = self.fc(torch.cat([images, features], dim=1))
         # _b, _f = images.shape

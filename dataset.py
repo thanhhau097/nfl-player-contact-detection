@@ -80,10 +80,12 @@ class NFLDataset(Dataset):
             [
                 # A.Resize(size, size),
                 A.HorizontalFlip(p=0.5),
-                A.ShiftScaleRotate(p=0.5),
-                A.RandomBrightnessContrast(
-                    brightness_limit=(-0.1, 0.1), contrast_limit=(-0.1, 0.1), p=0.5
-                ),
+                A.ShiftScaleRotate(p=0.8),
+                A.RandomBrightnessContrast(p=0.5),
+                # A.ShiftScaleRotate(p=0.5),
+                # A.RandomBrightnessContrast(
+                #     brightness_limit=(-0.1, 0.1), contrast_limit=(-0.1, 0.1), p=0.5
+                # ),
                 A.Normalize(mean=[0.0], std=[1.0]),
                 ToTensorV2(),
             ]
@@ -214,6 +216,7 @@ class NFLDataset(Dataset):
             else:
                 players.append(int(p))
         imgs = []
+        masks = []
         # import time
         for view in ["Endzone", "Sideline"]:
             # start = time.time()
@@ -236,31 +239,31 @@ class NFLDataset(Dataset):
                 if players[0] == "G":
                     tmp_0 = tmp_0[tmp_0.nfl_player_id.isin([players[1]])] \
                             .groupby("frame")[
-                                ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
-                                # ["left", "width", "top", "height"]
+                                # ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
+                                ["left", "width", "top", "height"]
                                 # ["x1_n", "y1_n", "x2_n", "y2_n"]
                             ] \
                             .mean()
                 else:
                     tmp_0 = tmp_0[tmp_0.nfl_player_id.isin([players[0]])] \
                             .groupby("frame")[
-                                ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
-                                # ["left", "width", "top", "height"]
+                                # ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
+                                ["left", "width", "top", "height"]
                                 # ["x1_n", "y1_n", "x2_n", "y2_n"]
                             ] \
                             .mean()
             else:
                 tmp_0 = tmp_0[tmp_0.nfl_player_id.isin([players[0]])] \
                         .groupby("frame")[
-                            ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
-                            # ["left", "width", "top", "height"]
+                            # ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
+                            ["left", "width", "top", "height"]
                             # ["x1_n", "y1_n", "x2_n", "y2_n"]
                         ] \
                         .mean()
                 tmp_1 = tmp_1[tmp_1.nfl_player_id.isin([players[1]])] \
                         .groupby("frame")[
-                            ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
-                            # ["left", "width", "top", "height"]
+                            # ["left", "width", "top", "height", "x1_n", "y1_n", "x2_n", "y2_n"]
+                            ["left", "width", "top", "height"]
                             # ["x1_n", "y1_n", "x2_n", "y2_n"]
                         ] \
                         .mean()
@@ -295,20 +298,20 @@ class NFLDataset(Dataset):
                 else:
                     bboxes.append([np.nan, np.nan, np.nan, np.nan])
                 if f in tmp_players_frame_dict_0:
-                    x0, w0, y0, h0, yl0_x1, yl0_y1, yl0_x2, yl0_y2 = tmp_players_frame_dict_0[f]
-                    bboxes_0.append([x0, w0, y0, h0, yl0_x1, yl0_y1, yl0_x2, yl0_y2])
-                    # x0, w0, y0, h0 = tmp_players_frame_dict_0[f]
-                    # bboxes_0.append([x0, w0, y0, h0])
+                    # x0, w0, y0, h0, yl0_x1, yl0_y1, yl0_x2, yl0_y2 = tmp_players_frame_dict_0[f]
+                    # bboxes_0.append([x0, w0, y0, h0, yl0_x1, yl0_y1, yl0_x2, yl0_y2])
+                    x0, w0, y0, h0 = tmp_players_frame_dict_0[f]
+                    bboxes_0.append([x0, w0, y0, h0])
                 else:
-                    bboxes_0.append([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
+                    bboxes_0.append([np.nan, np.nan, np.nan, np.nan])
                 if "G" not in players:
                     if f in tmp_players_frame_dict_1:
-                        x1, w1, y1, h1, yl1_x1, yl1_y1, yl1_x2, yl1_y2 = tmp_players_frame_dict_1[f]
-                        bboxes_1.append([x1, w1, y1, h1, yl1_x1, yl1_y1, yl1_x2, yl1_y2])
-                        # x1, w1, y1, h1 = tmp_players_frame_dict_1[f]
-                        # bboxes_1.append([x1, w1, y1, h1])
+                        # x1, w1, y1, h1, yl1_x1, yl1_y1, yl1_x2, yl1_y2 = tmp_players_frame_dict_1[f]
+                        # bboxes_1.append([x1, w1, y1, h1, yl1_x1, yl1_y1, yl1_x2, yl1_y2])
+                        x1, w1, y1, h1 = tmp_players_frame_dict_1[f]
+                        bboxes_1.append([x1, w1, y1, h1])
                     else:
-                        bboxes_1.append([np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan])
+                        bboxes_1.append([np.nan, np.nan, np.nan, np.nan])
 
             bboxes = pd.DataFrame(bboxes).interpolate(limit_direction="both").values
             bboxes = bboxes[:: self.frame_steps]
@@ -347,9 +350,9 @@ class NFLDataset(Dataset):
                     # h = h*1.5
 
                     mask = np.zeros_like(img)
+                    x0, w0, y0, h0 = bboxes_0[i]
                     # maskyl = np.zeros_like(img)
-                    x0, w0, y0, h0, yl0_x1, yl0_y1, yl0_x2, yl0_y2 = bboxes_0[i]
-                    # x0, w0, y0, h0 = bboxes_0[i]
+                    # yl0_x1, yl0_y1, yl0_x2, yl0_y2 = bboxes_0[i]
                     # x0 = x0*1.5
                     # w0 = w0*1.5
                     # y0 = y0*1.5
@@ -361,8 +364,8 @@ class NFLDataset(Dataset):
                         a = 1
 
                     if "G" not in players:
-                        x1, w1, y1, h1, yl1_x1, yl1_y1, yl1_x2, yl1_y2 = bboxes_1[i]
-                        # x1, w1, y1, h1 = bboxes_1[i]
+                        # yl1_x1, yl1_y1, yl1_x2, yl1_y2 = bboxes_1[i]
+                        x1, w1, y1, h1 = bboxes_1[i]
                         # x1 = x1*1.5
                         # w1 = w1*1.5
                         # y1 = y1*1.5
@@ -403,8 +406,7 @@ class NFLDataset(Dataset):
                     mask_new[: mask.shape[0], : mask.shape[1]] = mask
                     # maskyl_new[: maskyl.shape[0], : maskyl.shape[1]] = maskyl
                 imgs.append(img_new)
-                imgs.append(img_new * mask_new)
-                # imgs.append(img_new * maskyl_new)
+                masks.append(mask_new)
             
             # print("image reading time", time.time() - start)
             # print("------------------------")
@@ -413,17 +415,24 @@ class NFLDataset(Dataset):
         feature = torch.from_numpy(self.feature[idx])
 
         img = np.array(imgs).transpose(1, 2, 0).astype(np.uint8)
-        if self.mode == "train":
-            img = self.train_aug(image=img)["image"]
-        else:
-            img = self.valid_aug(image=img)["image"]
-        # img = self.valid_aug(image=img)["image"]
+        mask = np.array(masks).transpose(1, 2, 0).astype(np.uint8)
 
+        if self.mode == "train":
+            transformed = self.train_aug(image=img, mask=mask)
+        else:
+            transformed = self.valid_aug(image=img, mask=mask)
+        img = transformed["image"]
+        mask = transformed["mask"].transpose(1, 2).transpose(0, 1)
         label = self.labels.contact.values[idx]
+        mix = []
+        for i, m in list(zip(img, mask)):
+            mix.append(i)
+            mix.append(m)
+        mix = torch.stack(mix)
         contact_id = self.labels.contact_id.values[idx]
         # print("augmentation time", time.time() - start)
         # print("--------------------------------------------------------------------------------")
-        return {"images": img, "features": feature, "labels": label, "contact_ids": contact_id}
+        return {"images": mix, "features": feature, "labels": label, "contact_ids": contact_id}
 
 
 def collate_fn(batch):
@@ -443,7 +452,7 @@ def collate_fn(batch):
         "images": images,
         "features": features,
         "labels": labels,
-        "contact_ids": contact_ids,
+        "contact_ids": contact_ids
     }
     return batch
 

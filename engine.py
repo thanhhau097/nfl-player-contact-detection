@@ -21,7 +21,7 @@ class CustomTrainer(Trainer):
     #     return ProportionalTwoClassesBatchSampler(
     #         self.train_dataset.labels["contact"].values,
     #         self.args.per_device_train_batch_size,
-    #         minority_size_in_batch=self.args.per_device_train_batch_size // 4,
+    #         minority_size_in_batch=self.args.per_device_train_batch_size // 5,
     #         world_size=self.args.world_size,
     #         local_rank=self.args.local_rank
     #     )
@@ -31,7 +31,6 @@ class CustomTrainer(Trainer):
         outputs = model(
                     inputs["images"].to(device), 
                     inputs["features"].to(device),
-                    inputs["contact_ids"],
                 )
         # loss, logits, embeddings = model(images, labels)
         loss_fct = F.binary_cross_entropy_with_logits

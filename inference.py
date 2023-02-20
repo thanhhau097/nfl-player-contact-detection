@@ -75,7 +75,7 @@ def main():
         labels_df[labels_df["fold"] == fold],
         helmets[helmets["fold"] == fold],
         video_folder=os.path.join(data_folder, "train"),
-        frames_folder=os.path.join(data_folder, "frames"),
+        frames_folder=os.path.join('/data/hoanganh/', "frames"),
         mode="val",
         size=data_args.size,
         num_frames=data_args.num_frames,
@@ -105,15 +105,14 @@ def main():
     with torch.no_grad():
         tk = tqdm(test_loader, total=len(test_loader))
         for step, batch in enumerate(tk):
-            output, features = model(batch["images"].to(device), batch["features"].to(device))
+            output = model(batch["images"].to(device), batch["features"].to(device))
             output = output.sigmoid().cpu().numpy()
-            features = features.cpu().numpy()
             contact_ids = batch["contact_ids"]
             for i in range(len(contact_ids)):
-                feat_prob[contact_ids[i]] = [output[i][0], features[i]]
+                feat_prob[contact_ids[i]] = output[i][0]
 
-    print(f"Saving result to {model_args.model_name}_feat_prob_fold{data_args.fold}.pth..")
-    torch.save(feat_prob, f"{model_args.model_name}_feat_prob_fold{data_args.fold}.pth")
+    print(f"Saving result to {model_args.model_name}_prob_fold{data_args.fold}.pth..")
+    torch.save(feat_prob, f"{model_args.model_name}_prob_fold{data_args.fold}.pth")
 
 if __name__ == "__main__":
     main()

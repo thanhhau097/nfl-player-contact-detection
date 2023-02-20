@@ -65,13 +65,14 @@ def main():
     fold = data_args.fold
 
     labels_df = pd.read_csv(os.path.join(data_folder, "train_features.csv"))
-    # helmets = pd.read_csv(os.path.join(data_folder, "train_baseline_helmets_kfold.csv"))
-    helmets = pd.read_csv(os.path.join(data_folder, "train_baseline_helmets_kfold_yolox_boxes_fix.csv"))
+    helmets = pd.read_csv(os.path.join(data_folder, "train_baseline_helmets_kfold.csv"))
+    # helmets = pd.read_csv(os.path.join(data_folder, "train_baseline_helmets_kfold_yolox_boxes_fix.csv"))
     train_dataset = NFLDataset(
         labels_df[labels_df["fold"] != fold],
         helmets[helmets["fold"] != fold],
         video_folder=os.path.join(data_folder, "train"),
-        frames_folder=os.path.join(data_folder, "frames"),
+        # frames_folder=os.path.join(data_folder, "frames"),
+        frames_folder=os.path.join('/data/hoanganh/', "frames"),
         mode="train",
         size=data_args.size,
         num_frames=data_args.num_frames,
@@ -86,7 +87,8 @@ def main():
         labels_df[labels_df["fold"] == fold],
         helmets[helmets["fold"] == fold],
         video_folder=os.path.join(data_folder, "train"),
-        frames_folder=os.path.join(data_folder, "frames"),
+        # frames_folder=os.path.join(data_folder, "frames"),
+        frames_folder=os.path.join('/data/hoanganh/', "frames"),
         mode="val",
         size=data_args.size,
         num_frames=data_args.num_frames,
