@@ -66,12 +66,13 @@ def main():
 
     labels_df = pd.read_csv(os.path.join(data_folder, "train_features.csv"))
     helmets = pd.read_csv(os.path.join(data_folder, "train_baseline_helmets_kfold.csv"))
-
+    # helmets = pd.read_csv(os.path.join(data_folder, "train_baseline_helmets_kfold_yolox_boxes_fix.csv"))
     train_dataset = NFLDataset(
         labels_df[labels_df["fold"] != fold],
         helmets[helmets["fold"] != fold],
         video_folder=os.path.join(data_folder, "train"),
-        frames_folder=os.path.join(data_folder, f"train_frames{'_heatmap' if data_args.use_heatmap else ''}", str(fold)),
+        # frames_folder=os.path.join(data_folder, "frames"),
+        frames_folder=os.path.join('/data/hoanganh/', "frames"),
         mode="train",
         size=data_args.size,
         num_frames=data_args.num_frames,
@@ -86,7 +87,8 @@ def main():
         labels_df[labels_df["fold"] == fold],
         helmets[helmets["fold"] == fold],
         video_folder=os.path.join(data_folder, "train"),
-        frames_folder=os.path.join(data_folder, f"val_frames{'_heatmap' if data_args.use_heatmap else ''}", str(fold)),
+        # frames_folder=os.path.join(data_folder, "frames"),
+        frames_folder=os.path.join('/data/hoanganh/', "frames"),
         mode="val",
         size=data_args.size,
         num_frames=data_args.num_frames,
@@ -116,7 +118,8 @@ def main():
     # )
 
     # Initialize trainer
-    model = Model(model_args.model_name, in_chans=data_args.num_frames)
+    # model = Model(model_args.model_name, in_chans=data_args.num_frames)
+    model = Model(model_args.model_name)
     if last_checkpoint is None and model_args.resume is not None:
         logger.info(f"Loading {model_args.resume} ...")
         checkpoint = torch.load(model_args.resume, "cpu")
@@ -168,6 +171,11 @@ def main():
         thresholds = np.arange(0.1, 0.9, 0.01)
         scores = []
         predictions = torch.sigmoid(torch.from_numpy(output.predictions)).numpy()
+        # contact_id = labels_df[labels_df["fold"] != fold].contact_id
+        # print(predictions.shape)
+        # print(len(contact_id))
+        # df_new = pd.DataFrame({'contact_id': contact_id, 'model_prob': predictions[:, 0]})
+        # df_new.to_csv("result_model.csv", index=False)
         labels = output.label_ids
         for threshold in thresholds:
             preds = predictions
